@@ -32,7 +32,7 @@ struct heat_stat heater_status;
 
 void heater_task(){
 	TickType_t xLastWakeTime;
-	const TickType_t xFrequency = pdMS_TO_TICKS(1000);
+	const TickType_t xFrequency = pdMS_TO_TICKS(3000);
 	BaseType_t xWasDelayed;
 	float *t;
 
