@@ -156,7 +156,16 @@ static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req)
 
 
 
+void ws_task(void){
 
+    // need to know if websocket is still connected, else we exit
+
+    // test if values are updated
+
+    // prepare command
+
+    //send command
+}
 
 
 
@@ -211,6 +220,7 @@ static esp_err_t get_ws_handler(httpd_req_t *req)
 {
 	if (req->method == HTTP_GET) {
 		ESP_LOGI(TAG, "Handshake done, the new connection was opened");
+	    xTaskCreate( ws_task, "ws task", 4096, NULL, 5, NULL );
 		return ESP_OK;
 	}
     httpd_ws_frame_t ws_pkt;
@@ -295,8 +305,7 @@ httpd_handle_t start_webserver(void)
 		ESP_LOGI(TAG, "Registering URI handlers");
 		httpd_register_uri_handler(server, &get_index);
 		httpd_register_uri_handler(server, &get_root);
-		// Registering the ws handler
-		httpd_register_uri_handler(server, &get_ws);
+		httpd_register_uri_handler(server, &get_ws);    // Registering the ws handler
 		return server;
 	}
 	ESP_LOGI(TAG, "Error starting server!");

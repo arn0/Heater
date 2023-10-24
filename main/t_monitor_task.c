@@ -16,7 +16,7 @@
 
 
 
-static const char *TAG = "heater_task";
+static const char *TAG = "monitor_task";
 
 // chip temperature sensor
 temperature_sensor_handle_t temp_sensor = NULL;
@@ -25,9 +25,6 @@ ds18b20_device_handle_t ds18b20s[HEATER_ONEWIRE_MAX_DS18B20];
 
 // number of ds18b20 devices found
 int ds18b20_device_num = 0;
-
-// global access to heater staus
-struct heat_stat heater_status;
 
 
 void t_monitor_task(){

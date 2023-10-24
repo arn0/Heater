@@ -232,93 +232,120 @@
 
 
 <script>
-	
-	
-        var gateway = `ws://${window.location.hostname}/ws`;
-        var websocket;
-        function initWebSocket() {
-          console.log('Trying to open a WebSocket connection...');
-          websocket = new WebSocket(gateway);
-          websocket.onopen    = onOpen;
-          websocket.onclose   = onClose;
-          websocket.onmessage = onMessage; // <-- add this line
-        }
-        function onOpen(event) {
-          console.log('Connection opened');
-        }
+	const t_rem = document.getElementById("t_rem");
+	const t_frt = document.getElementById("t_frt");
+	const t_top = document.getElementById("t_top");
+	const t_bot = document.getElementById("t_bot");
+	const t_chp = document.getElementById("t_chp");
+
+	const volt = document.getElementById("volt");
+	const amp = document.getElementById("amp");
+
+	const wifi = document.getElementById("wifi");
+	const blue = document.getElementById("blue");
+	const matt = document.getElementById("matt");
+
+
+	var gateway = `ws://${window.location.hostname}/ws`;
+	var websocket;
+
+	function initWebSocket() {
+		console.log('Trying to open a WebSocket connection...');
+		websocket = new WebSocket(gateway);
+		websocket.onopen    = onOpen;
+		websocket.onclose   = onClose;
+		websocket.onmessage = onMessage; // <-- add this line
+	}
+
+	function onOpen(event) {
+		console.log('Connection opened');
+		wifi.style.background = '#00c4fa';
+	}
+
+
+	 function onClose(event) {
+		console.log('Connection closed');
+		wifi.style.background = '#BEBEBE';
+		setTimeout(initWebSocket, 2000);
+	}
+
+	function onMessage(event) {
+
+		switch(event.data.at(0){
+			case "a":
+				t_rem.innerHTML = event.data.substring(1);
+				break;
+			case "b":
+				t_frt.innerHTML = event.data.substring(1);
+				break;
+			case "c":
+				t_top.innerHTML = event.data.substring(1);
+				break;
+			case "d":
+				t_bot.innerHTML = event.data.substring(1);
+				break;
+			case "e":
+				t_chp.innerHTML = event.data.substring(1);
+				break;
+		}
+
+	//var state;
+		//if (event.data == "1"){
+			//state = "ON";
+		//}else{
+			//state = "OFF";
+		//}
+		//document.getElementById('state').innerHTML = state;
+	}
+
+	window.addEventListener('load', onLoad);
+
+	function onLoad(event) {
+		initWebSocket();
+		initButton();
+	}
       
-        function onClose(event) {
-          console.log('Connection closed');
-          setTimeout(initWebSocket, 2000);
-        }
-        function onMessage(event) {
-          var state;
-          if (event.data == "1"){
-            state = "ON";
-          }
-          else{
-            state = "OFF";
-          }
-          document.getElementById('state').innerHTML = state;
-        }
-        window.addEventListener('load', onLoad);
-        function onLoad(event) {
-          initWebSocket();
-          initButton();
-        }
-      
-        function initButton() {
-          document.getElementById('button').addEventListener('click', toggle);
-        }
-        function toggle(){
-          websocket.send('toggle');
-        }
+	function initButton() {
+		document.getElementById('button1').addEventListener('click', toggle);
+	}
 
-const heat_1 = document.getElementById("button1");
-const heat_2 = document.getElementById("button2");
+	function toggle(){
+		websocket.send('toggle');
+	}
+
+	const heat_1 = document.getElementById("button1");
+	const heat_2 = document.getElementById("button2");
 	
-let counter = 0;
+	let counter = 0;
 
-function increment() {
-  counter++;
-}
+	function increment() {
+		counter++;
+	}
 
-function decrement() {
-  counter--;
-}
+	function decrement() {
+		counter--;
+	}
 
-function get() {
-  return counter;
-}
+	function get() {
+  		return counter;
+	}
 
-const inc = document.getElementById("increment");
-const input = document.getElementById("input");
-const dec = document.getElementById("decrement");
+	const inc = document.getElementById("increment");
+	const input = document.getElementById("input");
+	const dec = document.getElementById("decrement");
 
-inc.addEventListener("click", () => {
-  increment();
-  input.value = get();
-});
+	inc.addEventListener("click", () => {
+		increment();
+		input.value = get();
+	});
 
-dec.addEventListener("click", () => {
-  if (input.value > 0) {
-    decrement();
-  }
-  input.value = get();
-});
+	dec.addEventListener("click", () => {
+		if (input.value > 0) {
+			decrement();
+  		}
+		input.value = get();
+	});
 
 	
-const t_rem = document.getElementById("t_rem");
-const t_frt = document.getElementById("t_frt");
-const t_top = document.getElementById("t_top");
-const t_bot = document.getElementById("t_bot");
-const t_chp = document.getElementById("t_chp");
-
-const volt = document.getElementById("volt");
-const amp = document.getElementById("amp");
-
-const wifi = document.getElementById("wifi");
-const blue = document.getElementById("blue");
-const matt = document.getElementById("matt");
 </script>
 </html>

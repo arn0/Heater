@@ -22,14 +22,16 @@
 
 static const char *TAG = "heater_task";
 
+// global access to heater staus
 struct heat_stat heater_status;
 
 
 void heater_task(){
 	TickType_t xLastWakeTime;
-	const TickType_t xFrequency = pdMS_TO_TICKS(3000);
+	const TickType_t xFrequency = pdMS_TO_TICKS(333);
 	BaseType_t xWasDelayed;
 	float *t;
+	bool tick = false;
 
 	// Initialise the xLastWakeTime variable with the current time.
 	xLastWakeTime = xTaskGetTickCount ();
@@ -39,12 +41,29 @@ void heater_task(){
 		xWasDelayed = xTaskDelayUntil( &xLastWakeTime, xFrequency );
 
 		if( xWasDelayed == pdFALSE ){
-			ESP_LOGE(TAG, "Task ran out of time");
+			ESP_LOGE( TAG, "Task ran out of time" );
 		}
 		
-		// find out target temperature
-		
 		// set heaters
+
+		if( heater_status.safe ){
+			if( tick ){
+				tick = false;
+				if( heater_status.one_d != heater_status.one_s ){
+					heater_status.one_s = heater_status.one_d;
+					gpio_set_level( HEATER_SSR_ONE_GPIO, heater_status.one_s );
+				}
+			}else{
+				tick = true;
+				if( heater_status.two_d != heater_status.two_s ){
+					heater_status.two_s = heater_status.two_d;
+					gpio_set_level( HEATER_SSR_TWO_GPIO, heater_status.two_s );
+				}
+			}
+		}else{
+			gpio_set_level( HEATER_SSR_ONE_GPIO, 0 );
+			gpio_set_level( HEATER_SSR_TWO_GPIO, 0 );
+		}
 
 	}while (true);
 }
@@ -85,6 +104,14 @@ bool start_heater_task(){
 		return(false);
 	}
 
+	// initialize heater status
+	heater_status.safe = false;
+	heater_status.one_s = false;
+	heater_status.two_s =false;
+	heater_status.one_d = false;
+	heater_status.two_d = false;
+	heater_status.target = 20;
+	
 	// Now we start the heater contol loop
 	// default priority is 5
 	// lowest priority is 0, the idle task has priority zero
