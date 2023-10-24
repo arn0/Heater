@@ -26,6 +26,7 @@
 #include "heater_task.h"
 #include "t_monitor_task.h"
 #include "wifi_station.h"
+#include "webmdns.h"
 #include "events.h"
 #include "webserver.h"
 #include "gpio_pins.h"
@@ -87,6 +88,8 @@ void app_main(void)
          	//ESP_LOGE( TAG, "Failed to update system time within 10s timeout" );
  			//}
  			start_webserver();
+			start_mdns_service();
+
             //xTaskCreate( tcp_transport_client_task, "tcp_transport_client", 4096, NULL, 5, NULL );
 		} else if ( bits & WIFI_DISCONNECTED_BIT ) {
 			ESP_LOGI(TAG, "Failed to connect to SSID:%s", SECRET_SSID);
