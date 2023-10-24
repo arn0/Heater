@@ -24,6 +24,7 @@
 
 
 #include "heater_task.h"
+#include "t_monitor_task.h"
 #include "wifi_station.h"
 #include "events.h"
 #include "webserver.h"
@@ -47,8 +48,9 @@ void app_main(void)
 	}
 	ESP_ERROR_CHECK(ret);
 
-    start_heater_task();
-    led_strip_start();
+	start_heater_task();	// error check here
+	start_t_monitor_task();
+	led_strip_start();
 
 
 	setenv( "TZ", "CET-1CEST,M3.5.0/2,M10.5.0/3", 100 );		// set timezone and daylight saving time
@@ -84,7 +86,7 @@ void app_main(void)
      		//if ( esp_netif_sntp_sync_wait( pdMS_TO_TICKS( 10000 ) ) != ESP_OK ) {
          	//ESP_LOGE( TAG, "Failed to update system time within 10s timeout" );
  			//}
- 			init_webserver();
+ 			start_webserver();
             //xTaskCreate( tcp_transport_client_task, "tcp_transport_client", 4096, NULL, 5, NULL );
 		} else if ( bits & WIFI_DISCONNECTED_BIT ) {
 			ESP_LOGI(TAG, "Failed to connect to SSID:%s", SECRET_SSID);

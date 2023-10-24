@@ -24,8 +24,8 @@
 #define HEATER_ONEWIRE_BUS_GPIO	10
 
 // level converters for heater ssr's
-#define HEATER_SSR_ONE_GPIO	0
-#define HEATER_SSR_TWO_GPIO	0
+#define HEATER_SSR_ONE_GPIO	6
+#define HEATER_SSR_TWO_GPIO	7
 
 // voltage and current measuring
 #define MAINS_VOLTAGE_GPIO	0

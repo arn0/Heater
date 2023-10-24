@@ -1,32 +1,27 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "driver/gpio.h"
 #include "esp_system.h"
 #include "esp_log.h"
-#include "driver/temperature_sensor.h"
-#include "ds18b20.h"
-#include "onewire_bus.h"
 
 #include "gpio_pins.h"
 #include "heater_task.h"
 
 
+/*
+ * Let's say, GPIO_OUTPUT_IO_0=18, GPIO_OUTPUT_IO_1=19
+ * In binary representation,
+ * 1ULL<<GPIO_OUTPUT_IO_0 is equal to 0000000000000000000001000000000000000000 and
+ * 1ULL<<GPIO_OUTPUT_IO_1 is equal to 0000000000000000000010000000000000000000
+ * GPIO_OUTPUT_PIN_SEL                0000000000000000000011000000000000000000
+ */
 
-#define HEATER_ONEWIRE_MAX_DS18B20 4
-
+#define GPIO_OUTPUT_PIN_SEL  ((1ULL<<HEATER_SSR_ONE_GPIO) | (1ULL<<HEATER_SSR_TWO_GPIO))
 
 
 
 static const char *TAG = "heater_task";
 
-// chip temperature sensor
-temperature_sensor_handle_t temp_sensor = NULL;
-
-ds18b20_device_handle_t ds18b20s[HEATER_ONEWIRE_MAX_DS18B20];
-
-// number of ds18b20 devices found
-int ds18b20_device_num = 0;
-
-// global access to heater staus
 struct heat_stat heater_status;
 
 
@@ -49,35 +44,6 @@ void heater_task(){
 		
 		// find out target temperature
 		
-		// chip temperature reading
-		ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_sensor, &heater_status.chip));
-		ESP_LOGI(TAG, "Temperature value %.02f ℃", heater_status.chip);
-
-		// ds18b20 temperature reading
-		for (int i = 0; i < ds18b20_device_num; i ++) {
-			ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(ds18b20s[i]));
-			switch (i)
-			{
-			case 0:
-				t = &heater_status.bot;
-				break;
-			case 1:
-				t = &heater_status.top;
-				break;
-			case 2:
-				t = &heater_status.env;
-				break;
-			
-			default:
-				break;
-			}
-			ESP_ERROR_CHECK(ds18b20_get_temperature(ds18b20s[i], t));
-			ESP_LOGI(TAG, "temperature read from DS18B20[%d]: %.2fC", i, *t);
-		}
-
-		// remote temperature reading
-
-
 		// set heaters
 
 	}while (true);
@@ -91,56 +57,42 @@ void heater_task(){
 
 bool start_heater_task(){
 
-	// start internal on-chip temperature sensor
-	// need to go over config details!!!
-	ESP_LOGI(TAG, "Install internal temperature sensor, expected temp ranger range: 10~50 ℃");
-	temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10, 50);
-	ESP_ERROR_CHECK(temperature_sensor_install(&temp_sensor_config, &temp_sensor));
+	// First thing to do considering safety:
+	// set the GPIO pins for thr heater ssr's
+	// and turn the ssr's OFF
 
-	ESP_LOGI(TAG, "Enable temperature sensor");
-	ESP_ERROR_CHECK(temperature_sensor_enable(temp_sensor));
+	esp_err_t ret;
 
-
-	// install 1-wire bus
-	onewire_bus_handle_t bus = NULL;
-	onewire_bus_config_t bus_config = { .bus_gpio_num = HEATER_ONEWIRE_BUS_GPIO,    };
-	
-	// 1byte ROM command + 8byte ROM number + 1byte device command
-	onewire_bus_rmt_config_t rmt_config = { .max_rx_bytes = 10,     };
-	ESP_ERROR_CHECK(onewire_new_bus_rmt(&bus_config, &rmt_config, &bus));
-
-	onewire_device_iter_handle_t iter = NULL;
-	onewire_device_t next_onewire_device;
-	esp_err_t search_result = ESP_OK;
-
-	// create 1-wire device iterator, which is used for device search
-	ESP_ERROR_CHECK(onewire_new_device_iter(bus, &iter));
-	ESP_LOGI(TAG, "Device iterator created, start searching...");
-	do {
-		search_result = onewire_device_iter_get_next(iter, &next_onewire_device);
-		if (search_result == ESP_OK) { // found a new device, let's check if we can upgrade it to a DS18B20
-			ds18b20_config_t ds_cfg = {};
-			// check if the device is a DS18B20, if so, return the ds18b20 handle
-			if (ds18b20_new_device(&next_onewire_device, &ds_cfg, &ds18b20s[ds18b20_device_num]) == ESP_OK) {
-				ESP_LOGI(TAG, "Found a DS18B20[%d], address: %016llX", ds18b20_device_num, next_onewire_device.address);
-				ds18b20_device_num++;
-			} else {
-				ESP_LOGI(TAG, "Found an unknown device, address: %016llX", next_onewire_device.address);
-			}
-		}
-	} while (search_result != ESP_ERR_NOT_FOUND);
-	ESP_ERROR_CHECK(onewire_del_device_iter(iter));
-	ESP_LOGI(TAG, "Searching done, %d DS18B20 device(s) found", ds18b20_device_num);
-
-	// Now you have the DS18B20 sensor handle, you can use it to read the temperature
-
-	// Here we have to match the found sensors to the position these are mounted
-
-	// Here we set the GPIO pins for thr heater ssr's
+	gpio_config_t io_conf = {};							//zero-initialize the config structure
+	io_conf.intr_type = GPIO_INTR_DISABLE;				//disable interrupt
+	io_conf.mode = GPIO_MODE_OUTPUT;						//set as output mode
+	io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;		//bit mask of the pins that you want to set,e.g.GPIO18/19
+	io_conf.pull_down_en = 0;								//disable pull-down mode
+	io_conf.pull_up_en = 0;									//disable pull-up mode
+	ret = gpio_config(&io_conf);							//configure GPIO with the given settings
+	if( ret != ESP_OK ){
+		ESP_ERROR_CHECK(ret);
+		return(false);
+	}
+	ret = gpio_set_level(HEATER_SSR_ONE_GPIO, 0);
+	if( ret != ESP_OK ){
+		ESP_ERROR_CHECK(ret);
+		return(false);
+	}
+	ret = gpio_set_level(HEATER_SSR_TWO_GPIO, 0);
+	if( ret != ESP_OK ){
+		ESP_ERROR_CHECK(ret);
+		return(false);
+	}
 
 	// Now we start the heater contol loop
+	// default priority is 5
+	// lowest priority is 0, the idle task has priority zero
+	// highest priority is configMAX_PRIORITIES - 1,
+	// on this system 25 - 1 = 24
+	// so a very high priority for this task: 20
 
-	xTaskCreate( heater_task, "heater_task", 4096, NULL, 5, NULL );
+	xTaskCreate( heater_task, "heater_task", 4096, NULL, 20, NULL );
 
 	return(true);
 }
