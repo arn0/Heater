@@ -10,11 +10,12 @@
 #include "heater_task.h"
 
 
+#define HEATER_ONEWIRE_MAX_DS18B20 3
 
-#define HEATER_ONEWIRE_MAX_DS18B20 4
-
-
-
+// ds18b20 addresses
+#define DS18B20_ENV 0xC283138009646128
+#define DS18B20_TOP 0x94116F8009646128
+#define DS18B20_BOT 0x2CB9958109646128
 
 static const char *TAG = "monitor_task";
 
@@ -22,6 +23,10 @@ static const char *TAG = "monitor_task";
 temperature_sensor_handle_t temp_sensor = NULL;
 
 ds18b20_device_handle_t ds18b20s[HEATER_ONEWIRE_MAX_DS18B20];
+
+ds18b20_device_handle_t t_sensor_env;
+ds18b20_device_handle_t t_sensor_top;
+ds18b20_device_handle_t t_sensor_bot;
 
 // number of ds18b20 devices found
 int ds18b20_device_num = 0;
@@ -31,7 +36,8 @@ void t_monitor_task(){
 	TickType_t xLastWakeTime;
 	const TickType_t xFrequency = pdMS_TO_TICKS(3000);
 	BaseType_t xWasDelayed;
-	float *t;
+	float *temperature;
+	int step = 0;
 
 	// Initialise the xLastWakeTime variable with the current time.
 	xLastWakeTime = xTaskGetTickCount ();
@@ -44,39 +50,45 @@ void t_monitor_task(){
 			ESP_LOGE(TAG, "Task ran out of time");
 		}
 		
-		// find out target temperature
-		
-		// chip temperature reading
-		ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_sensor, &heater_status.chip));
-		ESP_LOGI(TAG, "Temperature value %.02f ℃", heater_status.chip);
-
-		// ds18b20 temperature reading
-		for (int i = 0; i < ds18b20_device_num; i ++) {
-			ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(ds18b20s[i]));
-			switch (i)
-			{
+		switch(step++){
 			case 0:
-				t = &heater_status.bot;
+				// chip temperature reading
+				ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_sensor, &heater_status.chip));
+				heater_status.web |= CHP_W_FL;
+				//ESP_LOGI(TAG, "Temperature value %.02f ℃", heater_status.chip);
 				break;
+
+				// ds18b20 temperature reading
 			case 1:
-				t = &heater_status.top;
+				ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_env));
 				break;
+
 			case 2:
-				t = &heater_status.env;
+				ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_env, &heater_status.env));
+				heater_status.web |= ENV_W_FL;
 				break;
-			
+
+			case 3:
+				ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_top));
+				break;
+
+			case 4:
+				ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_top, &heater_status.top));
+				heater_status.web |= TOP_W_FL;
+				break;
+
+			case 5:
+				ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_bot));
+				break;
+
+			case 6:
+				ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bot, &heater_status.bot));
+				heater_status.web |= BOT_W_FL;
+				break;
+
 			default:
-				break;
-			}
-			ESP_ERROR_CHECK(ds18b20_get_temperature(ds18b20s[i], t));
-			ESP_LOGI(TAG, "temperature read from DS18B20[%d]: %.2fC", i, *t);
+				step = 0;
 		}
-
-		// remote temperature reading
-
-
-		// set heaters
-
 	}while (true);
 }
 
@@ -133,9 +145,9 @@ bool start_t_monitor_task(){
 
 	// Here we have to match the found sensors to the position these are mounted
 
-	// Here we set the GPIO pins for thr heater ssr's
-
-	// Now we start the heater contol loop
+	t_sensor_env = ds18b20s[0];
+	t_sensor_top = ds18b20s[1];
+	t_sensor_bot = ds18b20s[2];
 
 	xTaskCreate( t_monitor_task, "t monitor task", 4096, NULL, 5, NULL );
 
