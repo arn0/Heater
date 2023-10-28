@@ -18,6 +18,7 @@
 
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<HEATER_SSR_ONE_GPIO) | (1ULL<<HEATER_SSR_TWO_GPIO))
 
+#define HEATER_TASK_TIME_MS 300
 
 
 static const char *TAG = "heater_task";
@@ -28,9 +29,8 @@ struct heat_stat heater_status;
 
 void heater_task(){
 	TickType_t xLastWakeTime;
-	const TickType_t xFrequency = pdMS_TO_TICKS(333);
+	const TickType_t xTimeIncrement = pdMS_TO_TICKS(HEATER_TASK_TIME_MS);
 	BaseType_t xWasDelayed;
-	float *t;
 	bool tick = false;
 
 	// Initialise the xLastWakeTime variable with the current time.
@@ -38,7 +38,7 @@ void heater_task(){
 
 	do{
 		// Wait for the next cycle.
-		xWasDelayed = xTaskDelayUntil( &xLastWakeTime, xFrequency );
+		xWasDelayed = xTaskDelayUntil( &xLastWakeTime, xTimeIncrement );
 
 		if( xWasDelayed == pdFALSE ){
 			ESP_LOGE( TAG, "Task ran out of time" );
@@ -51,12 +51,14 @@ void heater_task(){
 				tick = false;
 				if( heater_status.one_d != heater_status.one_s ){
 					heater_status.one_s = heater_status.one_d;
+					heater_status.web |= ONE_W_FL;
 					gpio_set_level( HEATER_SSR_ONE_GPIO, heater_status.one_s );
 				}
 			}else{
 				tick = true;
 				if( heater_status.two_d != heater_status.two_s ){
 					heater_status.two_s = heater_status.two_d;
+					heater_status.web |= TWO_W_FL;
 					gpio_set_level( HEATER_SSR_TWO_GPIO, heater_status.two_s );
 				}
 			}

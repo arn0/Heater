@@ -17,6 +17,8 @@
 #define DS18B20_TOP 0x94116F8009646128
 #define DS18B20_BOT 0x2CB9958109646128
 
+#define MONITOR_TASK_TIME_MS 900
+
 static const char *TAG = "monitor_task";
 
 // chip temperature sensor
@@ -34,7 +36,7 @@ int ds18b20_device_num = 0;
 
 void t_monitor_task(){
 	TickType_t xLastWakeTime;
-	const TickType_t xFrequency = pdMS_TO_TICKS(3000);
+	const TickType_t xTimeIncrement = pdMS_TO_TICKS(MONITOR_TASK_TIME_MS);
 	BaseType_t xWasDelayed;
 	float *temperature;
 	int step = 0;
@@ -44,7 +46,7 @@ void t_monitor_task(){
 
 	do{
 		// Wait for the next cycle.
-		xWasDelayed = xTaskDelayUntil( &xLastWakeTime, xFrequency );
+		xWasDelayed = xTaskDelayUntil( &xLastWakeTime, xTimeIncrement );
 
 		if( xWasDelayed == pdFALSE ){
 			ESP_LOGE(TAG, "Task ran out of time");
@@ -55,7 +57,6 @@ void t_monitor_task(){
 				// chip temperature reading
 				ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_sensor, &heater_status.chip));
 				heater_status.web |= CHP_W_FL;
-				//ESP_LOGI(TAG, "Temperature value %.02f ℃", heater_status.chip);
 				break;
 
 				// ds18b20 temperature reading
@@ -66,6 +67,8 @@ void t_monitor_task(){
 			case 2:
 				ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_env, &heater_status.env));
 				heater_status.web |= ENV_W_FL;
+				//ESP_LOGI(TAG, "Temperature value %.02f ℃", heater_status.env);
+				//ESP_LOGI(TAG, "Temperature value %.01f ℃", heater_status.env);
 				break;
 
 			case 3:

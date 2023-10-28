@@ -6,33 +6,23 @@
 		display: inline-block;
 		text-align: center;
 	}
-	h1 {
-		color: #8C3636;
-	}
-	h2 {
+	h1 , h2, h3 {
 		color: #8C3636;
 	}
 	h3 {
-    color: #8C3636;
     margin-top: 20px;
     margin-bottom: 4px;
 	}
-
 	table{
 		margin-left: auto;
 		margin-right: auto;
 	}
+
 	.monosp{
     font-family: "Lucida Console", "Lucida Sans Typewriter", Monaco, "Courier New", monospace;
 	}
-	div{
-		margin-left: auto;
-		margin-right: auto;
-	}
-
-	.top_button {
+	.top_button_off, .top_button_on {
     display: inline-block;
-    background-color: #b30000;
     border-radius: 4px;
     color: white;
     padding: 16px 40px;
@@ -46,16 +36,14 @@
     font-weight: bold;
 	}
 
-	.button2 {
-	background-color: #364cf4;
+	.top_button_off {
+		background-color: #0014a8;
 	}
-
-	.content {
-		margin: auto;
+	.top_button_on {
+		background-color: #b30000;
 	}
 	.card-grid {
-		max-width: 600px;
-		margin: 0 auto;
+		margin: auto;
 		display: grid;
 		grid-gap: 2rem;
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -73,36 +61,25 @@
 	}
 
 	.input-group {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: row;
-    box-shadow: 2px 3px 4px rgba(0, 0, 0, 0.3), 4px 7px 15px rgba(0, 0, 0, 0.2),
-    	9px 15px 25px rgba(0, 0, 0, 0.2);
-    border-radius: 15px;
-    max-width: 240px;
-    margin-left: 60px;
-    margin-right: 60px;
-    margin-bottom: 40px;
+		display: flex;
+		flex-direction: row;
+		box-shadow: 2px 3px 4px rgba(0, 0, 0, 0.3);
+		border-radius: 15px;
 	}
 
 
-	input[type=number]::-webkit-inner-spin-button{
-		display:none;
-		-webkit-appearance:none;
+	.timp-nput {
+		padding: 16px;
+		font-size: 18px;
+		align-content: center;
+		color: red;
 	}
 
-	button,
-	input {
+	button {
 		outline: none;
 		border: none;
 		padding: 16px;
 		font-size: 18px;
-	}
-
-	input {
-		width: 100%;
-		text-align: center;
 	}
 
 	button {
@@ -131,6 +108,29 @@
 		box-shadow: inset 4px 5px 10px rgba(0, 0, 0, 0.5);
 	}
 
+	.temp-label {
+		width: 60px;
+    	margin: 16px;
+	}
+	
+	.data {
+    	display: inline-block;
+    	font-family: "Lucida Console", "Lucida Sans Typewriter", Monaco, "Courier New", monospace;
+    	width: 16px;
+    	margin: 4px;
+    	text-align: left;
+	}
+
+	.data-volt, .data-amp, .data-watt {
+		width: 64px;
+		text-align: right;
+	}
+
+	.data-amp {
+		width: 36px;
+		text-align: right;
+	}
+	
 	.icon-wifi {
 		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg class='layer'%3E%3Cpath fill='none' d='M0 0h24v24H0V0zm0 0h24v24H0V0z'/%3E%3Cpath d='M.52 9.74a1.6 1.6 0 0 0 2.15.12c5.37-4.42 13.18-4.42 18.56-.01.64.53 1.59.48 2.17-.1.68-.68.63-1.81-.12-2.42C16.71 1.96 7.2 1.96.62 7.33c-.75.6-.81 1.73-.12 2.42zm8.93 8.93 1.69 1.69c.45.45 1.17.45 1.62 0l1.69-1.69c.54-.54.43-1.47-.26-1.83-1.4-.72-3.08-.72-4.5 0-.66.36-.78 1.29-.24 1.83zm-4.29-4.29c.56.56 1.45.62 2.11.15a8.13 8.13 0 0 1 9.39 0c.66.46 1.54.41 2.11-.15l.01-.01c.69-.69.64-1.86-.15-2.43-3.96-2.87-9.36-2.87-13.33 0-.79.58-.84 1.74-.14 2.44z'/%3E%3C/g%3E%3C/svg%3E");
 	}
@@ -152,8 +152,7 @@
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
     mask-position: center;
-    margin-top: 32px;
-    margin-bottom: 32px;
+    margin: 32px;
 }
 
 	.icon:hover,
@@ -168,69 +167,77 @@
 </head>
 
 <body>
-<div class="content">
-	<div class="card-grid">
 		<div class="card">
 			<h1>Radiator</h1>
-			<div><button id="button1" class="top_button">I</button> <button id="button2" class="top_button">II</button></div>
+			<div>
+				<button id="button1" class="top_button_off">I</button>
+				<button id="button2" class="top_button_off">II</button>
+			</div>
 			<h2>Temperatuur</h2>
 			<div class="input-group">
 				<button id="decrement">-</button>
-				<input type="number" id="input" value="0" readonly>
+				<input class="temp-input" id="input" type="text" value="--.-" readonly>
 				<button id="increment">+</button>
 			</div>
 			<div>
-				<table width="90%" border="0">
+				<table border="0">
 					<tbody>
 						<tr>
-							<td width="10%">remote</td>
-							<td width="10%">voor</td>
-							<td width="10%">boven</td>
-							<td width="10%">onder</td>
-							<td width="10%">chip</td>
+							<td class="temp-label">remote</td>
+							<td class="temp-label">voor</td>
+							<td class="temp-label">boven</td>
+							<td class="temp-label">onder</td>
+							<td class="temp-label">chip</td>
 						</tr>
-						<tr>
-							<td id="t_rem" class="monosp">20</td>
-							<td id="t_frt" class="monosp">20</td>
-							<td id="t_top" class="monosp">20</td>
-							<td id="t_bot" class="monosp">20</td>
-							<td id="t_chp" class="monosp">20</td>
+						<tr class="monosp">
+							<td id="t_rem">--.-</td>
+							<td id="t_frt">--.-</td>
+							<td id="t_top">--.-</td>
+							<td id="t_bot">--.-</td>
+							<td id="t_chp">--.-</td>
 						</tr>
 					</tbody>
 				</table>
 			</div>
 			<h3>Data</h3>
 			<div>
-				<table width="40%" border="0">
+				<table border="0">
 					<tbody>
 						<tr>
-							<td width="8%" id="volt" class="monosp">230,0</td>
-							<td width="4%" align="left" class="monosp">V</td>
-							<td width="8%" id="amp class="monosp"">0</td>
-							<td width="4%" align="left" class="monosp">A</td>
+							<td id="volt" class="data data-volt">---.-</td>
+							<td class="data">V</td>
+							<td id="amp" class="data data-amp">-.-</td>
+							<td class="data">A</td>
+							<td id="watt" class="data data-watt">----.-</td>
+							<td class="data">W</td>
 						</tr>
 					</tbody>
 				</table>
 			</div>
 			<div>
-				<table width="75%" border="0">
+				<table border="0">
 					<tbody>
 						<tr>
-							<td><span id="wifi" class="icon icon-wifi"></span></td>
-							<td><span id="blue" class="icon icon-bluetooth"></span></td>
-							<td><span id="matt" class="icon icon-matter"></span></td>
+							<td id="wifi" class="icon icon-wifi"></td>
+							<td id="blue" class="icon icon-bluetooth"></td>
+							<td id="matt" class="icon icon-matter"></td>
 						</tr>
 					</tbody>
 				</table>
 			</div>
 		</div>
-	</div>
-</div>
 </body>
 
 
 
 <script>
+	const heat_1 = document.getElementById("button1");
+	const heat_2 = document.getElementById("button2");
+	
+	const inc = document.getElementById("increment");
+	const target = document.getElementById("input");
+	const dec = document.getElementById("decrement");
+
 	const t_rem = document.getElementById("t_rem");
 	const t_frt = document.getElementById("t_frt");
 	const t_top = document.getElementById("t_top");
@@ -271,80 +278,69 @@
 	function onMessage(event) {
 
 		switch(event.data.at(0)){
-			case "a":
+			case "r":
 				t_rem.innerHTML = event.data.substring(1);
 				break;
-			case "b":
+			case "e":
 				t_frt.innerHTML = event.data.substring(1);
 				break;
-			case "c":
+			case "t":
 				t_top.innerHTML = event.data.substring(1);
 				break;
-			case "d":
+			case "b":
 				t_bot.innerHTML = event.data.substring(1);
 				break;
-			case "e":
+			case "c":
 				t_chp.innerHTML = event.data.substring(1);
 				break;
+			case "a":
+				target.value = event.data.substring(1);
+				break;
+			case "i":
+				if(event.data.at(1) == '1') {
+					heat_1.className = 'top_button_on';
+				}else{
+					heat_1.className = 'top_button_off';
+				}
+				break;
+			case "h":
+				if(event.data.at(1) == '1') {
+					heat_2.className = 'top_button_on';
+				}else{
+					heat_2.className = 'top_button_off';
+				}
+				break;
 		}
-
-	//var state;
-		//if (event.data == "1"){
-			//state = "ON";
-		//}else{
-			//state = "OFF";
-		//}
-		//document.getElementById('state').innerHTML = state;
 	}
 
 	window.addEventListener('load', onLoad);
 
 	function onLoad(event) {
 		initWebSocket();
-		initButton();
+		initButtons();
 	}
       
-	function initButton() {
-		document.getElementById('button1').addEventListener('click', toggle);
+	function initButtons() {
+		document.getElementById('button1').addEventListener('click', toggle_one);
+		document.getElementById('button2').addEventListener('click', toggle_two);
+		document.getElementById('decrement').addEventListener('click', decrement);
+		document.getElementById('increment').addEventListener('click', increment);
 	}
 
-	function toggle(){
-		websocket.send('toggle');
+	function toggle_one(){
+		websocket.send('I');
 	}
 
-	const heat_1 = document.getElementById("button1");
-	const heat_2 = document.getElementById("button2");
-	
-	let counter = 0;
-
-	function increment() {
-		counter++;
+	function toggle_two(){
+		websocket.send('H');
 	}
 
-	function decrement() {
-		counter--;
+	function decrement(){
+		websocket.send('D');
 	}
 
-	function get() {
-  		return counter;
+	function increment(){
+		websocket.send('U');
 	}
-
-	const inc = document.getElementById("increment");
-	const input = document.getElementById("input");
-	const dec = document.getElementById("decrement");
-
-	inc.addEventListener("click", () => {
-		increment();
-		input.value = get();
-	});
-
-	dec.addEventListener("click", () => {
-		if (input.value > 0) {
-			decrement();
-  		}
-		input.value = get();
-	});
-
-	
 </script>
 </html>

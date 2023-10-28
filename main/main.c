@@ -24,6 +24,7 @@
 
 
 #include "heater_task.h"
+#include "control_task.h"
 #include "t_monitor_task.h"
 #include "wifi_station.h"
 #include "webmdns.h"
@@ -52,7 +53,7 @@ void app_main(void)
 	start_heater_task();	// error check here
 	start_t_monitor_task();
 	led_strip_start();
-
+	start_control_task();
 
 	setenv( "TZ", "CET-1CEST,M3.5.0/2,M10.5.0/3", 100 );		// set timezone and daylight saving time
 	tzset();
