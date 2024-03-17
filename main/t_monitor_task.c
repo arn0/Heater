@@ -10,15 +10,14 @@
 #include "heater_task.h"
 #include "lvgl_ui.h"
 
-
-#define HEATER_ONEWIRE_MAX_DS18B20 3
+#define HEATER_ONEWIRE_MAX_DS18B20 3							// No more then 3 installed
 
 // ds18b20 addresses
 #define DS18B20_ENV 0xC283138009646128
 #define DS18B20_TOP 0x94116F8009646128
 #define DS18B20_BOT 0x2CB9958109646128
 
-#define MONITOR_TASK_TIME_MS 1000
+#define MONITOR_TASK_TIME_MS 1000								// DS18B20 are slow, take time
 
 static const char *TAG = "monitor_task";
 
@@ -31,9 +30,7 @@ ds18b20_device_handle_t t_sensor_env = NULL;
 ds18b20_device_handle_t t_sensor_top = NULL;
 ds18b20_device_handle_t t_sensor_bot = NULL;
 
-// number of ds18b20 devices found
-int ds18b20_device_num = 0;
-
+int ds18b20_device_num = 0;										// number of ds18b20 devices found
 
 void t_monitor_task(){
 	TickType_t xPreviousWakeTime;
@@ -42,18 +39,16 @@ void t_monitor_task(){
 	float *temperature;
 	int step = 0;
 
-	// Initialise the xPreviousWakeTime variable with the current time.
-	xPreviousWakeTime = xTaskGetTickCount ();
+	xPreviousWakeTime = xTaskGetTickCount ();					// Initialise the xPreviousWakeTime variable with the current time
 
-	do{
-		// Wait for the next cycle.
-		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );
+	do {
+		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );					// Wait for the next cycle
 
-		if( xWasDelayed == pdFALSE ){
+		if( xWasDelayed == pdFALSE ) {
 			ESP_LOGW(TAG, "Task was not delayed");
 		}
 		
-		switch(step++){
+		switch( step++ ) {
 			case 0:
 				// chip temperature reading
 				ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_sensor, &heater_status.chip));
@@ -97,7 +92,7 @@ void t_monitor_task(){
 				break;
 
 			case 6:
-			if(t_sensor_bot){
+				if(t_sensor_bot){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bot, &heater_status.bot));
 					heater_status.web |= BOT_W_FL;
 				}
@@ -106,7 +101,7 @@ void t_monitor_task(){
 			default:
 				step = 0;
 		}
-	}while (true);
+	} while (true);
 }
 
 /* Initialize requirements for the heater control loop
@@ -166,7 +161,7 @@ bool start_t_monitor_task(){
 	t_sensor_top = ds18b20s[1];
 	t_sensor_bot = ds18b20s[2];
 
-	xTaskCreate( t_monitor_task, "t monitor task", 4096, NULL, 5, NULL );
+	xTaskCreate( t_monitor_task, "monitor", 4096, NULL, 5, NULL );
 
 	return(true);
 }
