@@ -20,14 +20,12 @@
 
 #define HEATER_TASK_TIME_MS 300
 
+static const char *TAG = "heaters";
 
-static const char *TAG = "heater_task";
-
-// global access to heater staus
-struct heat_stat heater_status;
+struct heat_stat heater_status;										// global access to heater staus
 
 
-void heater_task(){
+void heater_task() {
 	TickType_t xLastWakeTime;
 	const TickType_t xTimeIncrement = pdMS_TO_TICKS(HEATER_TASK_TIME_MS);
 	BaseType_t xWasDelayed;
@@ -36,17 +34,17 @@ void heater_task(){
 	// Initialise the xLastWakeTime variable with the current time.
 	xLastWakeTime = xTaskGetTickCount ();
 
-	do{
+	do {
 		// Wait for the next cycle.
 		xWasDelayed = xTaskDelayUntil( &xLastWakeTime, xTimeIncrement );
 
 		if( xWasDelayed == pdFALSE ){
-			ESP_LOGE( TAG, "Task ran out of time" );
+			ESP_LOGW( TAG, "Task was not delayed" );
 		}
 		
 		// set heaters
 
-		if( heater_status.safe ){
+		if( heater_status.safe ) {
 			if( tick ){
 				tick = false;
 				if( heater_status.one_d != heater_status.one_s ){
@@ -54,7 +52,7 @@ void heater_task(){
 					heater_status.web |= ONE_W_FL;
 					gpio_set_level( HEATER_SSR_ONE_GPIO, heater_status.one_s );
 				}
-			}else{
+			} else {
 				tick = true;
 				if( heater_status.two_d != heater_status.two_s ){
 					heater_status.two_s = heater_status.two_d;
@@ -62,12 +60,12 @@ void heater_task(){
 					gpio_set_level( HEATER_SSR_TWO_GPIO, heater_status.two_s );
 				}
 			}
-		}else{
+		} else {
 			gpio_set_level( HEATER_SSR_ONE_GPIO, 0 );
 			gpio_set_level( HEATER_SSR_TWO_GPIO, 0 );
 		}
 
-	}while (true);
+	} while (true);
 }
 
 /* Initialize requirements for the heater control loop
@@ -106,8 +104,7 @@ bool start_heater_task(){
 		return(false);
 	}
 
-	// initialize heater status
-	heater_status.safe = false;
+	heater_status.safe = false;							// initialize heater status
 	heater_status.one_s = false;
 	heater_status.two_s =false;
 	heater_status.one_d = false;
@@ -121,7 +118,7 @@ bool start_heater_task(){
 	// on this system 25 - 1 = 24
 	// so a very high priority for this task: 20
 
-	xTaskCreate( heater_task, "heater_task", 4096, NULL, 20, NULL );
+	xTaskCreate( heater_task, "heaters", 4096, NULL, 20, NULL );
 
 	return(true);
 }
