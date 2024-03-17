@@ -32,9 +32,11 @@
 #include "webserver.h"
 #include "gpio_pins.h"
 #include "rgb_led.h"
+#include "spi_lcd.h"
 #include "../../secret.h"
 
 
+extern void real_time_stats(void);
 
 
 static const char *TAG = "example";
@@ -50,8 +52,10 @@ void app_main(void)
 	}
 	ESP_ERROR_CHECK(ret);
 
+	real_time_stats();
 	start_heater_task();	// error check here
 	start_t_monitor_task();
+	lcd_start();
 	led_strip_start();
 	start_control_task();
 
@@ -75,7 +79,6 @@ void app_main(void)
 	//esp_sntp_config_t sntp_config = ESP_NETIF_SNTP_DEFAULT_CONFIG( SECRET_ADDR );
 	EventBits_t bits;
 	TaskHandle_t xHandle_control_loop = NULL;
-    
     
    		/* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
 		 * number of re-tries (WIFI_DISCONNECTED_BIT). The bits are set by event_handler() (see above) */
@@ -117,13 +120,5 @@ void app_main(void)
 		} else {
 			ESP_LOGE(TAG, "UNEXPECTED EVENT");
 		}
-
-    
-    
-    
-    
-    
-    
-    
     }
 }

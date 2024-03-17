@@ -1,5 +1,7 @@
 ## IDF Component Manager Manifest File
 dependencies:
+  lvgl/lvgl: "~8.3.0"
+  espressif/esp_lcd_gc9a01: "*"
   espressif/mdns: "*"
   espressif/led_strip: "*"
   espressif/ds18b20: "*"

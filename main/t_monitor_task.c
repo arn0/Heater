@@ -8,6 +8,7 @@
 
 #include "gpio_pins.h"
 #include "heater_task.h"
+#include "lvgl_ui.h"
 
 
 #define HEATER_ONEWIRE_MAX_DS18B20 3
@@ -17,7 +18,7 @@
 #define DS18B20_TOP 0x94116F8009646128
 #define DS18B20_BOT 0x2CB9958109646128
 
-#define MONITOR_TASK_TIME_MS 900
+#define MONITOR_TASK_TIME_MS 1000
 
 static const char *TAG = "monitor_task";
 
@@ -26,30 +27,30 @@ temperature_sensor_handle_t temp_sensor = NULL;
 
 ds18b20_device_handle_t ds18b20s[HEATER_ONEWIRE_MAX_DS18B20];
 
-ds18b20_device_handle_t t_sensor_env;
-ds18b20_device_handle_t t_sensor_top;
-ds18b20_device_handle_t t_sensor_bot;
+ds18b20_device_handle_t t_sensor_env = NULL;
+ds18b20_device_handle_t t_sensor_top = NULL;
+ds18b20_device_handle_t t_sensor_bot = NULL;
 
 // number of ds18b20 devices found
 int ds18b20_device_num = 0;
 
 
 void t_monitor_task(){
-	TickType_t xLastWakeTime;
+	TickType_t xPreviousWakeTime;
 	const TickType_t xTimeIncrement = pdMS_TO_TICKS(MONITOR_TASK_TIME_MS);
 	BaseType_t xWasDelayed;
 	float *temperature;
 	int step = 0;
 
-	// Initialise the xLastWakeTime variable with the current time.
-	xLastWakeTime = xTaskGetTickCount ();
+	// Initialise the xPreviousWakeTime variable with the current time.
+	xPreviousWakeTime = xTaskGetTickCount ();
 
 	do{
 		// Wait for the next cycle.
-		xWasDelayed = xTaskDelayUntil( &xLastWakeTime, xTimeIncrement );
+		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );
 
 		if( xWasDelayed == pdFALSE ){
-			ESP_LOGE(TAG, "Task ran out of time");
+			ESP_LOGW(TAG, "Task was not delayed");
 		}
 		
 		switch(step++){
@@ -61,32 +62,45 @@ void t_monitor_task(){
 
 				// ds18b20 temperature reading
 			case 1:
-				ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_env));
+				if(t_sensor_env){
+					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_env));
+				}
 				break;
 
 			case 2:
-				ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_env, &heater_status.env));
-				heater_status.web |= ENV_W_FL;
+				if(t_sensor_env){
+					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_env, &heater_status.env));
+					heater_status.web |= ENV_W_FL;
+					lvgl_ui_set_t_1(heater_status.env);
 				//ESP_LOGI(TAG, "Temperature value %.02f ℃", heater_status.env);
 				//ESP_LOGI(TAG, "Temperature value %.01f ℃", heater_status.env);
+				}
 				break;
 
 			case 3:
-				ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_top));
+				if(t_sensor_top){
+					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_top));
+				}
 				break;
 
 			case 4:
-				ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_top, &heater_status.top));
-				heater_status.web |= TOP_W_FL;
+				if(t_sensor_top){
+					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_top, &heater_status.top));
+					heater_status.web |= TOP_W_FL;
+				}
 				break;
 
 			case 5:
-				ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_bot));
+				if(t_sensor_bot){
+					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_bot));
+				}
 				break;
 
 			case 6:
-				ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bot, &heater_status.bot));
-				heater_status.web |= BOT_W_FL;
+			if(t_sensor_bot){
+					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bot, &heater_status.bot));
+					heater_status.web |= BOT_W_FL;
+				}
 				break;
 
 			default:
@@ -117,7 +131,7 @@ bool start_t_monitor_task(){
 	onewire_bus_handle_t bus = NULL;
 	onewire_bus_config_t bus_config = { .bus_gpio_num = HEATER_ONEWIRE_BUS_GPIO,    };
 	
-	// 1byte ROM command + 8byte ROM number + 1byte device command
+	// 1 byte ROM command + 8 byte ROM number + 1 byte device command
 	onewire_bus_rmt_config_t rmt_config = { .max_rx_bytes = 10,     };
 	ESP_ERROR_CHECK(onewire_new_bus_rmt(&bus_config, &rmt_config, &bus));
 
