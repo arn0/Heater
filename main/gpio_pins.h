@@ -2,13 +2,17 @@
  * All GPIO pin assignments here
  */
 
+/*
+ * USB Serial/JTAG Controller uses GPIO 12 & 13
+ */
+
 // display GPIO GC9A01
-#define LCD_SPI_SCL_GPIO	0			// serial interface clock
-#define LCD_SPI_SDA_GPIO	0			// serial interface input/output pin
-#define LCD_SPI_DC_GPIO		0			// data/command selection pin
-#define LCD_SPI_CS_GPIO		0			// chip select pin, low=enable (module has pull-down resistor, not needed)
-#define LCD_SPI_RST_GPIO	0			// reset device, must be applied to properly initialize the chip, active low
-#define LCD_BACKLIGHT_GPIO	0			// reseved for backlight led control
+#define LCD_SPI_SCL_GPIO	18			// serial interface clock
+#define LCD_SPI_SDA_GPIO	19			// serial interface input/output pin
+#define LCD_SPI_DC_GPIO		20			// data/command selection pin
+#define LCD_SPI_CS_GPIO		24			// chip select pin, low=enable (module has pull-down resistor, not needed)
+#define LCD_SPI_RST_GPIO	23			// reset device, must be applied to properly initialize the chip, active low
+#define LCD_BACKLIGHT_GPIO	25			// reseved for backlight led control
 
 // touch GPIO
 #define TOUCH_TEMP_UP_GPIO	0
