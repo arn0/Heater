@@ -15,8 +15,6 @@
 static void analytics_create(lv_obj_t * parent);
 static void chart_event_cb(lv_event_t * e);
 
-static lv_obj_t * obj_rect;
-static lv_obj_t * obj_circle;
 static lv_obj_t * obj_t_1;
 static lv_obj_t * obj_t_2;
 static lv_obj_t * obj_t_3;
@@ -24,49 +22,58 @@ static lv_obj_t * obj_t_4;
 static lv_obj_t * obj_h_1;
 static lv_obj_t * obj_h_2;
 static lv_obj_t * obj_wifi;
-static lv_obj_t * obj_chart_box;
 static lv_obj_t * obj_chart;
 static lv_obj_t * obj_time;
 
 static lv_style_t style_t_large;
 static lv_style_t style_t_normal;
-
-static lv_style_t style_title;
+static lv_style_t style_t_red;
+static lv_style_t style_t_blue;
 
 static lv_chart_series_t * series1;
 
 static const lv_font_t * font_large;
 static const lv_font_t * font_normal;
 
-
-
-
-static lv_obj_t *meter;
-static lv_obj_t * btn;
-static lv_disp_rot_t rotation = LV_DISP_ROT_NONE;
-
-static void set_value(void *indic, int32_t v)
-{
-    lv_meter_set_indicator_end_value(meter, indic, v);
-}
-
-static void btn_cb(lv_event_t * e)
-{
-    lv_disp_t *disp = lv_event_get_user_data(e);
-    rotation++;
-    if (rotation > LV_DISP_ROT_270) {
-        rotation = LV_DISP_ROT_NONE;
-    }
-    lv_disp_set_rotation(disp, rotation);
-}
-
-
-void lvgl_ui_set_t_1(float t){
+void lvgl_ui_set_t_env(float t){
     lv_label_set_text_fmt(obj_t_1, "%.01f\u00b0C", t);
+}
+
+void lvgl_ui_set_t_top(float t){
+    lv_label_set_text_fmt(obj_t_2, "%.01f\u00b0C", t);
+}
+
+void lvgl_ui_set_t_bot(float t){
+    lv_label_set_text_fmt(obj_t_3, "%.01f\u00b0C", t);
+}
+
+void lvgl_ui_set_t_tar(float t){
+    lv_label_set_text_fmt(obj_t_4, "%.01f\u00b0C", t);
 }
 
 void lvgl_ui_set_time(char *string){
     lv_label_set_text(obj_time, string);
+}
+
+void lvgl_ui_set_t_h1(bool t)
+{
+    if(t)
+        lv_obj_add_style(obj_h_1, &style_t_red, LV_PART_MAIN);
+    else
+        lv_obj_add_style(obj_h_1, &style_t_blue, LV_PART_MAIN);
+}
+
+void lvgl_ui_set_t_h2(bool t)
+{
+    if(t)
+        lv_obj_add_style(obj_h_2, &style_t_red, LV_PART_MAIN);
+    else
+        lv_obj_add_style(obj_h_2, &style_t_blue, LV_PART_MAIN);
+}
+
+void lvgl_ui_set_wifi(bool t)
+{
+
 }
 
 void example_lvgl_demo_ui(lv_disp_t *disp)
@@ -79,28 +86,39 @@ void example_lvgl_demo_ui(lv_disp_t *disp)
     lv_style_init(&style_t_normal);
     lv_style_set_text_font(&style_t_normal, font_normal);
 
+    lv_style_init(&style_t_red);
+    lv_style_set_text_font(&style_t_red, font_normal);
+    lv_style_set_text_color(&style_t_red, lv_color_make(255,0,0));
+    lv_style_set_text_opa(&style_t_red, LV_OPA_COVER);
+
+    lv_style_init(&style_t_blue);
+    lv_style_set_text_font(&style_t_blue, font_normal);
+    lv_style_set_text_color(&style_t_blue, lv_color_make(0,0,255));
+    lv_style_set_text_opa(&style_t_blue, LV_OPA_40);
+    lv_style_set_text_font(&style_t_blue, font_normal);
+
     lv_obj_t *lv_scr = lv_disp_get_scr_act(disp);
 
     lv_obj_set_style_text_font(lv_scr, font_normal, 0);
 
     obj_t_1 = lv_label_create(lv_scr);
     lv_obj_add_style(obj_t_1, &style_t_large, LV_PART_MAIN);
-    lv_label_set_text(obj_t_1, "22.0\u00b0C");
+    lv_label_set_text(obj_t_1, "--.-\u00b0C");
     lv_obj_align(obj_t_1, LV_ALIGN_CENTER, 0, -60);
 
     obj_t_2 = lv_label_create(lv_scr);
     lv_obj_add_style(obj_t_2, &style_t_normal, LV_PART_MAIN);
-    lv_label_set_text(obj_t_2, "23.0\u00b0C");
+    lv_label_set_text(obj_t_2, "--.-\u00b0C");
     lv_obj_align(obj_t_2, LV_ALIGN_CENTER, -50, 52);
 
     obj_t_3 = lv_label_create(lv_scr);
     lv_obj_add_style(obj_t_3, &style_t_normal, LV_PART_MAIN);
-    lv_label_set_text(obj_t_3, "24.0\u00b0C");
+    lv_label_set_text(obj_t_3, "-.-\u00b0C");
     lv_obj_align(obj_t_3, LV_ALIGN_CENTER, 50, 52);
 
     obj_t_4 = lv_label_create(lv_scr);
     lv_obj_add_style(obj_t_4, &style_t_normal, LV_PART_MAIN);
-    lv_label_set_text(obj_t_4, "25.0\u00b0C");
+    lv_label_set_text(obj_t_4, "--.-\u00b0C");
     lv_obj_align(obj_t_4, LV_ALIGN_CENTER, 0, -92);
 
     obj_time = lv_label_create(lv_scr);
@@ -108,23 +126,15 @@ void example_lvgl_demo_ui(lv_disp_t *disp)
     lv_label_set_text(obj_time, "12:22:22");
     lv_obj_align(obj_time, LV_ALIGN_CENTER, 0, 52+20);
 
-    obj_h_1 = lv_arc_create(lv_scr);
-    lv_obj_set_size(obj_h_1, 240-8, 240-8);
-    lv_arc_set_bg_angles(obj_h_1, 0, 50);
-    lv_arc_set_rotation(obj_h_1, 180-25);
-    lv_arc_set_value(obj_h_1, 100);
+    obj_h_1 = lv_label_create(lv_scr_act());
+    lv_obj_add_style(obj_h_1, &style_t_blue, LV_PART_MAIN);
+    lv_obj_align(obj_h_1, LV_ALIGN_CENTER, 0-48, 52+20+12);
+    lv_label_set_text(obj_h_1, LV_SYMBOL_POWER);
 
-    lv_obj_remove_style(obj_h_1, NULL, LV_PART_KNOB);
-    lv_obj_center(obj_h_1);
-
-    obj_h_2 = lv_arc_create(lv_scr);
-    lv_obj_set_size(obj_h_2, 240-8, 240-8);
-    lv_arc_set_bg_angles(obj_h_2, 0, 50);
-    lv_arc_set_rotation(obj_h_2, 360-25);
-    lv_arc_set_value(obj_h_2, 100);
-
-    lv_obj_remove_style(obj_h_2, NULL, LV_PART_KNOB);
-    lv_obj_center(obj_h_2);
+    obj_h_2 = lv_label_create(lv_scr_act());
+    lv_obj_add_style(obj_h_2, &style_t_blue, LV_PART_MAIN);
+    lv_obj_align(obj_h_2, LV_ALIGN_CENTER, 0+48, 52+20+12);
+    lv_label_set_text(obj_h_2, LV_SYMBOL_POWER);
 
     obj_wifi = lv_label_create(lv_scr);
     lv_obj_add_style(obj_wifi, &style_t_normal, LV_PART_MAIN);
@@ -135,9 +145,6 @@ void example_lvgl_demo_ui(lv_disp_t *disp)
 }
 static void analytics_create(lv_obj_t * parent)
 {
-    static lv_coord_t grid_chart_row_dsc[] = {LV_GRID_CONTENT, LV_GRID_FR(1), 10, LV_GRID_TEMPLATE_LAST};
-    static lv_coord_t grid_chart_col_dsc[] = {20, LV_GRID_FR(1), LV_GRID_TEMPLATE_LAST};
-
     obj_chart = lv_chart_create(parent);
 	lv_chart_set_type(obj_chart, LV_CHART_TYPE_LINE);
     lv_chart_set_point_count(obj_chart, 12*4);
