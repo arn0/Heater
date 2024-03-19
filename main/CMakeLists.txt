@@ -2,6 +2,3 @@ idf_component_register(SRCS "real_time_stats_example_main.c" "spi_lcd.c" "lvgl_u
                        INCLUDE_DIRS ".")
 
 spiffs_create_partition_image(storage ../data FLASH_IN_PROJECT)
-
-idf_build_set_property(COMPILE_OPTIONS "-DLV_CONF_INCLUDE_SIMPLE=1" APPEND)
-idf_build_set_property(COMPILE_OPTIONS "-DLV_CONF_PATH= ${CMAKE_SOURCE_DIR}/main/lv_conf.h" APPEND)
