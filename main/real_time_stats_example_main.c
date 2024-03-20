@@ -19,7 +19,7 @@
 #define SPIN_ITER           0  //Actual CPU cycles used will depend on compiler optimization
 #define SPIN_TASK_PRIO      2
 #define STATS_TASK_PRIO     3
-#define STATS_TICKS         pdMS_TO_TICKS(1000)
+#define STATS_TICKS         pdMS_TO_TICKS(1000*20)
 #define ARRAY_SIZE_OFFSET   5   //Increase this if print_real_time_stats returns ESP_ERR_INVALID_SIZE
 
 static char task_names[NUM_OF_SPIN_TASKS][configMAX_TASK_NAME_LEN];
@@ -162,7 +162,7 @@ static void stats_task(void *arg)
         } else {
             printf("Error getting real time stats\n");
         }
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
