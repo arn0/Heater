@@ -19,6 +19,8 @@
 #include "esp_lcd_gc9a01.h"
 
 #include "spi_lcd.h"
+#include "lvgl_ui.h"
+#include "task_priorities"
 
 static const char *TAG = "spi_lcd";
 
@@ -75,15 +77,17 @@ static void example_lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_
 void lv_task(void *){
     do{
         // raise the task priority of LVGL and/or reduce the handler period can improve the performance
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(LVGL_TASK_DELAY_MS));
         // The task running lv_timer_handler should have lower priority than that running `lv_tick_inc`
         lv_timer_handler();
-
-
-
-
-        //vTaskDelay(pdMS_TO_TICKS(lv_timer_handler()));
+		//lvgl_ui_update();
     }while (true);
+}
+
+static void example_lvgl_port_update_callback(lv_disp_drv_t *drv)
+{
+    //esp_lcd_panel_handle_t panel_handle = (esp_lcd_panel_handle_t) drv->user_data;
+
 }
 
 static void example_increase_lvgl_tick(void *arg)
@@ -138,19 +142,12 @@ void lcd_start(void)
         .rgb_endian = LCD_RGB_ENDIAN_BGR,
         .bits_per_pixel = 16,
     };
-#if CONFIG_EXAMPLE_LCD_CONTROLLER_ILI9341
-    ESP_LOGI(TAG, "Install ILI9341 panel driver");
-    ESP_ERROR_CHECK(esp_lcd_new_panel_ili9341(io_handle, &panel_config, &panel_handle));
-#elif CONFIG_EXAMPLE_LCD_CONTROLLER_GC9A01
     ESP_LOGI(TAG, "Install GC9A01 panel driver");
     ESP_ERROR_CHECK(esp_lcd_new_panel_gc9a01(io_handle, &panel_config, &panel_handle));
-#endif
 
     ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
-#if CONFIG_EXAMPLE_LCD_CONTROLLER_GC9A01
     ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel_handle, true));
-#endif
     ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel_handle, true, false));
 
     // user can flush pre-defined pattern to the screen before we turn on the screen or backlight
@@ -172,7 +169,7 @@ void lcd_start(void)
     disp_drv.hor_res = EXAMPLE_LCD_H_RES;
     disp_drv.ver_res = EXAMPLE_LCD_V_RES;
     disp_drv.flush_cb = example_lvgl_flush_cb;
-    //disp_drv.drv_update_cb = example_lvgl_port_update_callback;
+    disp_drv.drv_update_cb = example_lvgl_port_update_callback;
     disp_drv.draw_buf = &disp_buf;
     disp_drv.user_data = panel_handle;
     lv_disp_t *disp = lv_disp_drv_register(&disp_drv);
@@ -197,5 +194,5 @@ void lcd_start(void)
         //lv_timer_handler();
     //}
 
-    xTaskCreate( lv_task, "lv_task", 4096, NULL, 6, NULL );
+    xTaskCreate( lv_task, "lv_task", 4096, NULL, LVGL_TASK_PRIORITY, NULL );
 }
