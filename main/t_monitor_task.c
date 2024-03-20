@@ -7,6 +7,7 @@
 #include "onewire_bus.h"
 
 #include "gpio_pins.h"
+#include "task_priorities"
 #include "heater_task.h"
 #include "lvgl_ui.h"
 
@@ -17,9 +18,7 @@
 #define DS18B20_TOP 0x94116F8009646128
 #define DS18B20_BOT 0x2CB9958109646128
 
-#define MONITOR_TASK_TIME_MS 1000								// DS18B20 are slow, take time
-
-static const char *TAG = "monitor_task";
+static const char *TAG = "monitor";
 
 // chip temperature sensor
 temperature_sensor_handle_t temp_sensor = NULL;
@@ -34,9 +33,9 @@ int ds18b20_device_num = 0;										// number of ds18b20 devices found
 
 void t_monitor_task(){
 	TickType_t xPreviousWakeTime;
-	const TickType_t xTimeIncrement = pdMS_TO_TICKS(MONITOR_TASK_TIME_MS);
+	const TickType_t xTimeIncrement = pdMS_TO_TICKS(MONITOR_TASK_DELAY_MS);
 	BaseType_t xWasDelayed;
-	float *temperature;
+//	float *temperature;
 	int step = 0;
 
 	xPreviousWakeTime = xTaskGetTickCount ();					// Initialise the xPreviousWakeTime variable with the current time
@@ -66,9 +65,6 @@ void t_monitor_task(){
 				if(t_sensor_env){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_env, &heater_status.env));
 					heater_status.web |= ENV_W_FL;
-					lvgl_ui_set_t_1(heater_status.env);
-				//ESP_LOGI(TAG, "Temperature value %.02f ℃", heater_status.env);
-				//ESP_LOGI(TAG, "Temperature value %.01f ℃", heater_status.env);
 				}
 				break;
 
@@ -161,7 +157,7 @@ bool start_t_monitor_task(){
 	t_sensor_top = ds18b20s[1];
 	t_sensor_bot = ds18b20s[2];
 
-	xTaskCreate( t_monitor_task, "monitor", 4096, NULL, 5, NULL );
+	xTaskCreate( t_monitor_task, "monitor", 4096, NULL, MONITOR_TASK_PRIORITY, NULL );
 
 	return(true);
 }

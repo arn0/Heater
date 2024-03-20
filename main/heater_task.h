@@ -21,10 +21,10 @@ struct heat_dat {
 
 struct heat_stat {
 	float target;
-	float chip;
+	float env;
 	float bot;
 	float top;
-	float env;
+	float chip;
 	float rem;
 	float volt;
 	float curr;

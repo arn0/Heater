@@ -26,8 +26,10 @@
 #define WIFI_MAXIMUM_RETRY 4
 #define WIFI_WAIT_TIME 2000
 
+bool wifi_ready = false;
+extern bool lvgl_ui_do_update;
 
-static const char *TAG = "> wifi station";
+static const char *TAG = "wifi station";
 
 /* FreeRTOS event group to signal when we are connected*/
 EventGroupHandle_t s_wifi_event_group;
@@ -91,9 +93,13 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
 			ESP_LOGI(TAG, "event handler: got ip:" IPSTR, IP2STR(&event->ip_info.ip));
 			s_retry_num = 0;
 			xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+			wifi_ready = true;
+//			lvgl_ui_do_update = true;
 			break;
 		case IP_EVENT_STA_LOST_IP: /*!< station lost IP and the IP is reset to 0 */
 			ESP_LOGI(TAG, "event handler: IP_EVENT_STA_LOST_IP");
+			wifi_ready = false;
+//			lvgl_ui_do_update = true;
 			break;
 		case IP_EVENT_AP_STAIPASSIGNED: /*!< soft-AP assign an IP to a connected station */
 			ESP_LOGI(TAG, "event handler: IP_EVENT_AP_STAIPASSIGNED");

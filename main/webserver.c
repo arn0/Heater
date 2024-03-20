@@ -12,6 +12,7 @@
 #include "nvs_flash.h"
 #include "esp_spiffs.h"
 
+#include "task_priorities"
 #include "heater_task.h"
 
 #define HEATER_WEB_STEP 0.5
@@ -220,23 +221,21 @@ esp_err_t send_sensor_update_frame(){
 }
 
 
-#define UPDATE_TASK_TIME_MS 1000
-
 /*
  * Send updates to client
  */
 
 void send_sensor_update(){
-	TickType_t xLastWakeTime;
-	const TickType_t xTimeIncrement = pdMS_TO_TICKS(UPDATE_TASK_TIME_MS);
+	TickType_t xPreviousWakeTime;
+	const TickType_t xTimeIncrement = pdMS_TO_TICKS(WS_UPDATE_TASK_DELAY_MS);
 	BaseType_t xWasDelayed;
 
 	// Initialise the xLastWakeTime variable with the current time.
-	xLastWakeTime = xTaskGetTickCount ();
+	xPreviousWakeTime = xTaskGetTickCount ();
 
 	do{
 		// Wait for the next cycle.
-		xWasDelayed = xTaskDelayUntil( &xLastWakeTime, xTimeIncrement );
+		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );
 
 		if( xWasDelayed == pdFALSE ){
 			ESP_LOGE( TAG, "Task ran out of time" );
@@ -436,7 +435,7 @@ httpd_handle_t start_webserver(void)
 		httpd_register_uri_handler(server, &get_root);
 		httpd_register_uri_handler(server, &get_ws);			// Registering the ws handler
 
-		xTaskCreate( send_sensor_update, "sensor update task", 4096, NULL, 5, NULL );
+		xTaskCreate( send_sensor_update, "sensor update task", 4096, NULL, WS_UPDATE_TASK_PRIORITY, NULL );
 		return server;
 	}
 	ESP_LOGI(TAG, "Error starting server!");

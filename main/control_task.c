@@ -3,9 +3,10 @@
 #include "esp_system.h"
 #include "esp_log.h"
 
-
+#include "task_priorities"
 #include "control_task.h"
 #include "heater_task.h"
+#include "lvgl_ui.h"
 
 
 /*
@@ -14,25 +15,23 @@
  * 
  */
 
-#define CONTROL_TASK_TIME_MS 500
-
 static const char *TAG = "control_task";
 
 void control_task(){
-	TickType_t xLastWakeTime;
-	const TickType_t xTimeIncrement = pdMS_TO_TICKS(CONTROL_TASK_TIME_MS);
+	TickType_t xPreviousWakeTime;
+	const TickType_t xTimeIncrement = pdMS_TO_TICKS(CONTROL_TASK_DELAY_MS);
 	BaseType_t xWasDelayed;
 	float delta;
 
 	// Initialise the xLastWakeTime variable with the current time.
-	xLastWakeTime = xTaskGetTickCount ();
+	xPreviousWakeTime = xTaskGetTickCount ();
 
 	do{
 		// Wait for the next cycle.
-		xWasDelayed = xTaskDelayUntil( &xLastWakeTime, xTimeIncrement );
+		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );
 
 		if( xWasDelayed == pdFALSE ){
-			ESP_LOGE( TAG, "Task ran out of time" );
+			ESP_LOGE( TAG, "Task was not delayed" );
 		}
 
 		heater_status.safe = true;
@@ -44,20 +43,16 @@ void control_task(){
 		if( delta <= 0 ){
 			heater_status.one_d = false;
 			heater_status.two_d = false;
-		} else if( delta > 2 ) {
+		} else if( delta > 0.6 ) {
 			heater_status.one_d = true;
 			heater_status.two_d = true;
-		} else if( delta > 1 ) {
+		} else if( delta > 0.3 ) {
 			heater_status.one_d = false;
 			heater_status.two_d = true;
 		} else {
 			heater_status.one_d = true;
 			heater_status.two_d = false;
 		}
-
-
-
-
 	}while (true);
 }
 
@@ -72,13 +67,8 @@ bool start_control_task(){
 	heater_status.safe = false;
 
 	// Now we start the contol loop
-	// default priority is 5
-	// lowest priority is 0, the idle task has priority zero
-	// highest priority is configMAX_PRIORITIES - 1,
-	// on this system 25 - 1 = 24
-	// so a somewhat higher priority for this task: 8
 
-	xTaskCreate( control_task, "control_task", 4096, NULL, 8, NULL );
+	xTaskCreate( control_task, "control_task", 4096, NULL, CONTROL_TASK_PRIORITY, NULL );
 
 	return(true);
 }

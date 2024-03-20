@@ -6,6 +6,8 @@
 
 #include "gpio_pins.h"
 #include "heater_task.h"
+#include "task_priorities"
+#include "lvgl_ui.h"
 
 
 /*
@@ -18,7 +20,6 @@
 
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<HEATER_SSR_ONE_GPIO) | (1ULL<<HEATER_SSR_TWO_GPIO))
 
-#define HEATER_TASK_TIME_MS 300
 
 static const char *TAG = "heaters";
 
@@ -26,17 +27,17 @@ struct heat_stat heater_status;										// global access to heater staus
 
 
 void heater_task() {
-	TickType_t xLastWakeTime;
-	const TickType_t xTimeIncrement = pdMS_TO_TICKS(HEATER_TASK_TIME_MS);
+	TickType_t xPreviousWakeTime;
+	const TickType_t xTimeIncrement = pdMS_TO_TICKS(HEATER_TASK_DELAY_MS);
 	BaseType_t xWasDelayed;
 	bool tick = false;
 
 	// Initialise the xLastWakeTime variable with the current time.
-	xLastWakeTime = xTaskGetTickCount ();
+	xPreviousWakeTime = xTaskGetTickCount ();
 
 	do {
 		// Wait for the next cycle.
-		xWasDelayed = xTaskDelayUntil( &xLastWakeTime, xTimeIncrement );
+		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );
 
 		if( xWasDelayed == pdFALSE ){
 			ESP_LOGW( TAG, "Task was not delayed" );
@@ -64,7 +65,6 @@ void heater_task() {
 			gpio_set_level( HEATER_SSR_ONE_GPIO, 0 );
 			gpio_set_level( HEATER_SSR_TWO_GPIO, 0 );
 		}
-
 	} while (true);
 }
 
@@ -77,7 +77,7 @@ void heater_task() {
 bool start_heater_task(){
 
 	// First thing to do considering safety:
-	// set the GPIO pins for thr heater ssr's
+	// set the GPIO pins for the heater ssr's
 	// and turn the ssr's OFF
 
 	esp_err_t ret;
@@ -85,7 +85,7 @@ bool start_heater_task(){
 	gpio_config_t io_conf = {};							//zero-initialize the config structure
 	io_conf.intr_type = GPIO_INTR_DISABLE;				//disable interrupt
 	io_conf.mode = GPIO_MODE_OUTPUT;						//set as output mode
-	io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;		//bit mask of the pins that you want to set,e.g.GPIO18/19
+	io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;		//bit mask of the pins that you want to set, e.g. GPIO18/19
 	io_conf.pull_down_en = 0;								//disable pull-down mode
 	io_conf.pull_up_en = 0;									//disable pull-up mode
 	ret = gpio_config(&io_conf);							//configure GPIO with the given settings
@@ -112,13 +112,8 @@ bool start_heater_task(){
 	heater_status.target = 20;
 	
 	// Now we start the heater contol loop
-	// default priority is 5
-	// lowest priority is 0, the idle task has priority zero
-	// highest priority is configMAX_PRIORITIES - 1,
-	// on this system 25 - 1 = 24
-	// so a very high priority for this task: 20
 
-	xTaskCreate( heater_task, "heaters", 4096, NULL, 20, NULL );
+	xTaskCreate( heater_task, "heaters", 4096, NULL, HEATER_TASK_PRIORITY, NULL );
 
 	return(true);
 }
