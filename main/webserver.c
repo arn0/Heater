@@ -435,7 +435,7 @@ httpd_handle_t start_webserver(void)
 		httpd_register_uri_handler(server, &get_root);
 		httpd_register_uri_handler(server, &get_ws);			// Registering the ws handler
 
-		xTaskCreate( send_sensor_update, "sensor update task", 4096, NULL, WS_UPDATE_TASK_PRIORITY, NULL );
+		xTaskCreate( send_sensor_update, "sensor update", 4096, NULL, WS_UPDATE_TASK_PRIORITY, NULL );
 		return server;
 	}
 	ESP_LOGI(TAG, "Error starting server!");
