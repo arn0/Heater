@@ -31,7 +31,7 @@ ds18b20_device_handle_t t_sensor_bot = NULL;
 
 int ds18b20_device_num = 0;										// number of ds18b20 devices found
 
-void t_monitor_task(){
+void monitor_task(){
 	TickType_t xPreviousWakeTime;
 	const TickType_t xTimeIncrement = pdMS_TO_TICKS(MONITOR_TASK_DELAY_MS);
 	BaseType_t xWasDelayed;
@@ -106,7 +106,7 @@ void t_monitor_task(){
  * heater solid state relais
 */
 
-bool start_t_monitor_task(){
+bool start_monitor_task(){
 
 	// start internal on-chip temperature sensor
 	// need to go over config details!!!
@@ -157,7 +157,7 @@ bool start_t_monitor_task(){
 	t_sensor_top = ds18b20s[1];
 	t_sensor_bot = ds18b20s[2];
 
-	xTaskCreate( t_monitor_task, "monitor", 4096, NULL, MONITOR_TASK_PRIORITY, NULL );
+	xTaskCreate( monitor_task, "monitor", 4096, NULL, MONITOR_TASK_PRIORITY, NULL );
 
 	return(true);
 }
