@@ -83,7 +83,7 @@ void app_main(void)
 
 	real_time_stats();
 	start_heater_task();			// error check here
-	start_t_monitor_task();
+	start_monitor_task();
 	lcd_start();
 	//led_strip_start();
 	start_control_task();
