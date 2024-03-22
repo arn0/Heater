@@ -18,6 +18,7 @@
 #include "lvgl.h"
 #include "esp_lcd_gc9a01.h"
 
+#include "gpio_pins.h"
 #include "spi_lcd.h"
 #include "lvgl_ui.h"
 #include "task_priorities"
