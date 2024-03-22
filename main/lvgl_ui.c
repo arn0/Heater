@@ -325,7 +325,7 @@ void find_min_max()
 
 void stats_task() {
 	TickType_t xPreviousWakeTime;
-	TickType_t xTimeIncrement = pdMS_TO_TICKS(STATS_TASK_DELAY_MS/30);
+	TickType_t xTimeIncrement = pdMS_TO_TICKS(STATS_TASK_DELAY_MS);
 	BaseType_t xWasDelayed;
 
 	// Initialise the xLastWakeTime variable with the current time.
@@ -339,21 +339,6 @@ void stats_task() {
 			ESP_LOGW( "stats", "Task was not delayed" );
 		}
 		if(data_points < DATA_POINTS){
-			if(data_points < DATA_POINTS / 8)
-			{
-				xTimeIncrement = pdMS_TO_TICKS(1000);
-			} else if(data_points < DATA_POINTS / 4)
-			{
-				xTimeIncrement = pdMS_TO_TICKS(3000);
-			} else if(data_points < DATA_POINTS / 2)
-			{
-				xTimeIncrement = pdMS_TO_TICKS(6000);
-			} else if(data_points < DATA_POINTS - 2)
-			{
-				xTimeIncrement = pdMS_TO_TICKS(12000);
-			} else {
-				xTimeIncrement = pdMS_TO_TICKS(STATS_TASK_DELAY_MS);
-			}
 			data[data_points++] = (int16_t) (heater_status.env * 100);
 		} else {
 			lv_chart_set_next_value(obj_chart, series1, (int16_t) (heater_status.env * 100));
