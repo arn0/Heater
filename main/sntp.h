@@ -1,3 +1,3 @@
-void sntp_init();
-void sntp_start();
-void sntp_stop();
+void timezone_set();
+void sntp_client_start();
+void sntp_client_stop();
