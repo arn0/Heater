@@ -17,9 +17,7 @@
 #include "clock.h"
 #include "lvgl_ui.h"
 
-extern bool wifi_ready;
-volatile bool lvgl_ui_do_update_h = false;
-volatile bool lvgl_ui_do_update_t = false;
+bool wifi_connected = false;
 bool lvg_ui_started = false;
 
 #define DATA_POINTS 24*8
@@ -88,7 +86,7 @@ void lvgl_ui_update(void)
 			lv_obj_set_style_text_opa(obj_h_2, LV_OPA_40, LV_PART_MAIN);
 		}
 
-		if(wifi_ready)
+		if(wifi_connected)
 		{
 			lv_obj_set_style_text_opa(obj_wifi, LV_OPA_COVER, LV_PART_MAIN);
 		} else {
@@ -173,6 +171,7 @@ void example_lvgl_demo_ui(lv_disp_t *disp)
 
    vTaskDelay(pdMS_TO_TICKS(5000));
 	stats_start();
+	lv_obj_invalidate(lv_scr_act());
 }
 
 static void analytics_create(lv_obj_t * parent)

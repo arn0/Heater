@@ -21,13 +21,12 @@
 
 #include "events.h"
 #include "wifi_station.h"
+#include "lvgl_ui.h"
 #include "../../secret.h"
 
 #define WIFI_MAXIMUM_RETRY 4
-#define WIFI_WAIT_TIME 2000
-
-bool wifi_ready = false;
-extern bool lvgl_ui_do_update;
+#define WIFI_SHORT_DELAY_MS 3 * 1000
+#define WIFI_LONG_DELAY_MS 60 * 1000
 
 static const char *TAG = "wifi station";
 
@@ -56,18 +55,25 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 			break;
 		case WIFI_EVENT_STA_CONNECTED: /**< Station connected to AP */
 			ESP_LOGI(TAG, "event handler: WIFI_EVENT_STA_CONNECTED");
+			s_retry_num = 0;
 			break;
 		case WIFI_EVENT_STA_DISCONNECTED: /**< Station disconnected from AP */
 			ESP_LOGI(TAG, "event handler: WIFI_EVENT_STA_DISCONNECTED");
+			wifi_connected = false;
+			lvgl_ui_update();
 			if (s_retry_num < WIFI_MAXIMUM_RETRY) {
-				vTaskDelay( WIFI_WAIT_TIME / portTICK_PERIOD_MS );
+				vTaskDelay(pdMS_TO_TICKS(WIFI_SHORT_DELAY_MS));
 				esp_wifi_connect();
 				ESP_LOGI(TAG, "event handler: esp_wifi_connect() done, retry %d", s_retry_num);
 				s_retry_num++;
 			} else {
-				xEventGroupSetBits(s_wifi_event_group, WIFI_DISCONNECTED_BIT);
-				ESP_LOGI(TAG, "event handler: xEventGroupSetBits(s_wifi_event_group, WIFI_DISCONNECTED_BIT) done");
-				s_retry_num = 0;
+				vTaskDelay(pdMS_TO_TICKS(WIFI_LONG_DELAY_MS));
+				esp_wifi_connect();
+				ESP_LOGI(TAG, "event handler: esp_wifi_connect() done, retry %d", s_retry_num);
+
+				//xEventGroupSetBits(s_wifi_event_group, WIFI_DISCONNECTED_BIT);
+				//ESP_LOGI(TAG, "event handler: xEventGroupSetBits(s_wifi_event_group, WIFI_DISCONNECTED_BIT) done");
+				//s_retry_num = 0;
 			}
 			ESP_LOGI(TAG, "event handler: connect to the AP failed");
 			break;
@@ -93,13 +99,13 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
 			ESP_LOGI(TAG, "event handler: got ip:" IPSTR, IP2STR(&event->ip_info.ip));
 			s_retry_num = 0;
 			xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-			wifi_ready = true;
-//			lvgl_ui_do_update = true;
+			wifi_connected = true;
+			lvgl_ui_update();
 			break;
 		case IP_EVENT_STA_LOST_IP: /*!< station lost IP and the IP is reset to 0 */
 			ESP_LOGI(TAG, "event handler: IP_EVENT_STA_LOST_IP");
-			wifi_ready = false;
-//			lvgl_ui_do_update = true;
+			wifi_connected = false;
+			lvgl_ui_update();
 			break;
 		case IP_EVENT_AP_STAIPASSIGNED: /*!< soft-AP assign an IP to a connected station */
 			ESP_LOGI(TAG, "event handler: IP_EVENT_AP_STAIPASSIGNED");
@@ -131,12 +137,10 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
 void wifi_init_station(void)
 {
 	s_wifi_event_group = xEventGroupCreate();
-
-	ESP_ERROR_CHECK(esp_netif_init());
-
 	ESP_ERROR_CHECK(esp_event_loop_create_default());
+	
+	ESP_ERROR_CHECK(esp_netif_init());
 	esp_netif_create_default_wifi_sta();
-
 	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
 	ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
