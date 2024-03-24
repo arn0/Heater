@@ -70,8 +70,8 @@ static void sntp_start(void)
 
 void app_main(void)
 {
-	setenv( "TZ", "CET-1CEST,M3.5.0/2,M10.5.0/3", 100 );		// set timezone and daylight saving time
-	tzset();
+	//setenv( "TZ", "CET-1CEST,M3.5.0/2,M10.5.0/3", 100 );		// set timezone and daylight saving time
+	//tzset();
 
 	//Initialize NVS
 	esp_err_t ret = nvs_flash_init();
@@ -89,6 +89,8 @@ void app_main(void)
 	start_control_task();
 	clock_start();
 
+	vTaskDelay(pdMS_TO_TICKS(800));		// need a little time before wifi is ready
+
 	ESP_LOGI(TAG, "Start wifi_init_station()");
 	wifi_init_station();
 
@@ -97,7 +99,7 @@ void app_main(void)
 		TaskHandle_t xHandle_control_loop = NULL;
 	 
 		/* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
-		 * number of re-tries (WIFI_DISCONNECTED_BIT). The bits are set by event_handler() (see above) */
+		 * number of re-tries (WIFI_DISCONNECTED_BIT). The bits are set by event_handler() */
 
 		bits = xEventGroupWaitBits( s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_DISCONNECTED_BIT | SLEEP_WAKEUP_BIT | TCP_CONNECTED_BIT | TCP_FAILED_BIT, pdTRUE, pdFALSE, portMAX_DELAY );
 
