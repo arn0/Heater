@@ -1,0 +1,158 @@
+html {
+ font-family: Arial;
+ text-align: center;
+}
+
+h1,
+h2,
+h3 {
+ color: #8C3636;
+}
+
+h3 {
+ margin-top: 20px;
+ margin-bottom: 4px;
+}
+
+table {
+ margin-left: auto;
+ margin-right: auto;
+}
+
+button {
+ display: inline-block;
+ outline: none;
+ border: none;
+ cursor: pointer;
+}
+
+button:hover {
+ background-color: #e6e6e6;
+}
+
+button:nth-last-child(1) {
+ border-bottom-right-radius: 15px;
+ border-top-right-radius: 15px;
+}
+
+button:nth-child(1) {
+ border-bottom-left-radius: 15px;
+ border-top-left-radius: 15px;
+}
+
+button:nth-last-child(1):active {
+ box-shadow: inset -4px 5px 10px rgba(0, 0, 0, 0.5);
+}
+
+button:nth-child(1):active {
+ box-shadow: inset 4px 5px 10px rgba(0, 0, 0, 0.5);
+}
+
+.he-mono {
+ font-family: "Lucida Console", "Lucida Sans Typewriter", Monaco, "Courier New", monospace;
+}
+
+.he-card {
+ display: inline-block;
+ width: 340px;
+ background-color: #EEEEEE;
+ box-shadow: 2px 2px 12px 1px rgba(140, 140, 140, .5);
+}
+
+.he-button-off,
+.he-button-on {
+ font-size: 30px;
+ font-weight: bold;
+ color: white;
+ padding: 16px 40px;
+ margin: 2px;
+ margin-bottom: 20px;
+ width: 100px;
+}
+
+.he-button-off {
+ background-color: #0014a8;
+}
+
+.he-button-on {
+ background-color: #b30000;
+}
+
+.te-input-group {
+ display: inline-block;
+ background-color: canvas;
+ box-shadow: 2px 3px 4px rgba(0, 0, 0, 0.3);
+ border-radius: 15px;
+ margin-bottom: 24px;
+}
+
+.te-input-string {
+ width: 90px;
+ padding-top: 16px;
+ padding-bottom: 16px;
+ padding-left: 0;
+ padding-right: 0;
+ border: none;
+ font-size: 18px;
+ text-align: center;
+}
+
+.te-input-button {
+ font-size: 18px;
+ background-color: canvas;
+ padding: 16px;
+}
+
+.te-label {
+ width: 60px;
+ margin: 16px;
+}
+
+.data {
+ display: inline-block;
+ font-family: "Lucida Console", "Lucida Sans Typewriter", Monaco, "Courier New", monospace;
+ width: 16px;
+ margin: 4px;
+ text-align: left;
+}
+
+.data-volt,
+.data-amp,
+.data-watt {
+ width: 64px;
+ text-align: right;
+}
+
+.data-amp {
+ width: 36px;
+ text-align: right;
+}
+
+.icon-wifi {
+ mask: url("wifi.svg");
+}
+
+.icon-bluetooth {
+ mask: url("bluetooth.svg");
+}
+
+.icon-matter {
+ mask: url("matter.svg");
+}
+
+.icon {
+ display: inline-block;
+ width: 24px;
+ height: 24px;
+ background: #BEBEBE;
+ mask-size: cover;
+ -webkit-mask-repeat: no-repeat;
+ mask-repeat: no-repeat;
+ mask-position: center;
+ margin: 32px;
+}
+
+.icon:hover,
+.icon:focus {
+ background: red;
+}
