@@ -12,6 +12,7 @@
 #include "nvs_flash.h"
 #include "esp_spiffs.h"
 
+#include "mount.h"
 #include "task_priorities"
 #include "heater_task.h"
 
@@ -33,47 +34,6 @@ static char readBuf[readBufSize];
 #define sendBufSize 256
 static char sendBuf[sendBufSize];
 
-
-/*
- * Initialize and mount SPIFFS partition for future access
- */
-
-esp_err_t spiffs_init()
-{
-	ESP_LOGI(TAG, "Initializing SPIFFS");
-
-	esp_vfs_spiffs_conf_t conf = {
-		.base_path = "/spiffs",
-		.partition_label = NULL,
-		.max_files = 5,
-		.format_if_mount_failed = false
-	};
-
-	// Use settings defined above to initialize and mount SPIFFS filesystem.
-	// Note: esp_vfs_spiffs_register is an all-in-one convenience function.
-
-	esp_err_t ret = esp_vfs_spiffs_register(&conf);
-
-	if (ret != ESP_OK) {
-		if (ret == ESP_FAIL) {
-			ESP_LOGE(TAG, "Failed to mount or format filesystem");
-		} else if (ret == ESP_ERR_NOT_FOUND) {
-			ESP_LOGE(TAG, "Failed to find SPIFFS partition");
-		} else {
-			ESP_LOGE(TAG, "Failed to initialize SPIFFS (%s)", esp_err_to_name(ret));
-		}
-		return ret;
-	}
-
-	size_t total = 0, used = 0;
-	ret = esp_spiffs_info(conf.partition_label, &total, &used);
-	if (ret != ESP_OK) {
-		ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s)", esp_err_to_name(ret));
-	} else {
-		ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
-	}
-	return ret;
-}
 
 /*
  * Reads file into memory buffer
@@ -102,7 +62,6 @@ static size_t read_spiff_buffer(const char *file_name)
 	}
 return readSize;
 }
-
 
 /*
  * Structure holding server handle and internal socket fd
@@ -149,39 +108,6 @@ static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req)
     return ret;
 }
 
-
-
-
-void ws_task(){
-
-	do{
-    // need to know if websocket is still connected, else we exit
-
-    // test if values are updated
-
-    // prepare command
-
-    //send command
-	}while (true);
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /*
  * Struct with information to uniquely identify a websocket
  */
@@ -205,8 +131,6 @@ void socket_close_cleanup(void* context){
   websock_client.descriptor = 0;
 }
 
-
-
 esp_err_t send_sensor_update_frame(){
 	httpd_ws_frame_t ws_frame = {
 		.final = true,
@@ -219,7 +143,6 @@ esp_err_t send_sensor_update_frame(){
 	ESP_ERROR_CHECK(httpd_ws_send_frame_async( websock_client.handle, websock_client.descriptor, &ws_frame ));
   return ESP_OK;
 }
-
 
 /*
  * Send updates to client
@@ -280,7 +203,6 @@ void send_sensor_update(){
 		}
   }while (true);
 }
-
 
 /*
  * URI handler for WebSocket
@@ -381,7 +303,6 @@ static const httpd_uri_t get_ws = {
         .is_websocket = true
 };
 
-
 /*
  * URI handler for main server page
  */
@@ -412,7 +333,6 @@ httpd_uri_t get_index = {
     .handler = get_index_handler,
     .user_ctx = NULL};
 
-
 /*
  * Webserver
  */
@@ -426,10 +346,10 @@ httpd_handle_t start_webserver(void)
 	websock_client.handle = NULL;
 	websock_client.descriptor = 0;
 
-	ESP_ERROR_CHECK( spiffs_init() );							// Initialize SPIFFS which holds the HTML/CSS/JS files we serve to client browser
+	ESP_ERROR_CHECK( spiffs_init( "/spiffs") );					// Initialize SPIFFS which holds the HTML/CSS/JS files we serve to client browser
 	
 	ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
-	if (httpd_start(&server, &config) == ESP_OK) {			// Start the httpd server
+	if (httpd_start(&server, &config) == ESP_OK) {				// Start the httpd server
 		ESP_LOGI(TAG, "Registering URI handlers");
 		httpd_register_uri_handler(server, &get_index);
 		httpd_register_uri_handler(server, &get_root);
