@@ -62,7 +62,6 @@ void app_main(void)
 
 	do {
 		EventBits_t bits;
-		TaskHandle_t xHandle_control_loop = NULL;
 	 
 		/* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
 		 * number of re-tries (WIFI_DISCONNECTED_BIT). The bits are set by event_handler() */
