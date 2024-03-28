@@ -11,7 +11,7 @@
 #include "lvgl_ui.h"
 
 
-time_t previous, now;
+time_t previous = 0, now;
 char strftime_buf[64];
 struct tm timeinfo;
 
@@ -27,8 +27,7 @@ void clock_task()
 	xPreviousWakeTime = xTaskGetTickCount ();									// Initialise the xPreviousWakeTime variable with the current time.
 
 	do {
-		// Wait for the next cycle.
-		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );
+		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );	// Wait for the next cycle.
 
 		if( xWasDelayed == pdFALSE ){
 			ESP_LOGW( TAG, "Task was not delayed" );
@@ -38,16 +37,12 @@ void clock_task()
 		if(now > previous){
 			localtime_r(&now, &timeinfo);
 			strftime(strftime_buf, sizeof(strftime_buf), "%k:%M:%S", &timeinfo);
-			lvgl_ui_update();
+			lvgl_ui_update();													// update display
 		}
   }while (true);
 }
 
 void clock_start(void)
 {
-	//setenv("TZ", "CEST-1CET,M3.2.0/2:00:00,M11.1.0/2:00:00", 1);			// Set timezone to Central European Time
-	//tzset();
-	previous = 0;
-
 	xTaskCreate( clock_task, "clock", 4096, NULL, CLOCK_TASK_PRIORITY, NULL );
 }
