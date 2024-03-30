@@ -1,320 +1,78 @@
 <!doctype html>
 <html>
-<style>
-	html {
-		font-family: Arial;
-		text-align: center;
-	}
-	h1 , h2, h3 {
-		color: #8C3636;
-	}
-	h3 {
-		margin-top: 20px;
-		margin-bottom: 4px;
-	}
-	table{
-		margin-left: auto;
-		margin-right: auto;
-	}
-	button {
-		display: inline-block;
-		outline: none;
-		border: none;
-		cursor: pointer;
-	}
-	button:hover {
-		background-color: #e6e6e6;
-	}
-	button:nth-last-child(1) {
-		border-bottom-right-radius: 15px;
-		border-top-right-radius: 15px;
-	}
-	button:nth-child(1) {
-		border-bottom-left-radius: 15px;
-		border-top-left-radius: 15px;
-	}
-	button:nth-last-child(1):active {
-		box-shadow: inset -4px 5px 10px rgba(0, 0, 0, 0.5);
-	}
-	button:nth-child(1):active {
-		box-shadow: inset 4px 5px 10px rgba(0, 0, 0, 0.5);
-	}
-	.he-mono{
-		font-family: "Lucida Console", "Lucida Sans Typewriter", Monaco, "Courier New", monospace;
-	}
-	.he-card {
-		display: inline-block;
-		width: 340px;
-		background-color: #EEEEEE;
-		box-shadow: 2px 2px 12px 1px rgba(140, 140, 140, .5);
-	}
-	.he-button-off, .he-button-on {
-		font-size: 30px;
-		font-weight: bold;
-		color: white;
-		padding: 16px 40px;
-		margin: 2px;
-		margin-bottom: 20px;
-		width: 100px;
-	}
-	.he-button-off {
-		background-color: #0014a8;
-	}
-	.he-button-on {
-		background-color: #b30000;
-	}
-	.te-input-group {
-		display: inline-block;
-		background-color: canvas;
-		box-shadow: 2px 3px 4px rgba(0, 0, 0, 0.3);
-		border-radius: 15px;
-		margin-bottom: 24px;
-	}
-	.te-input-string {
-		width: 90px;
-		padding-top: 16px;
-		padding-bottom: 16px;
-		padding-left: 0;
-		padding-right: 0;
-		border: none;
-		font-size: 18px;
-		text-align: center;
-	}
-	.te-input-button {
-		font-size: 18px;
-		background-color: canvas;
-		padding: 16px;
-	}
-	.te-label {
-		width: 60px;
-    	margin: 16px;
-	}
-	
-	.data {
-    	display: inline-block;
-    	font-family: "Lucida Console", "Lucida Sans Typewriter", Monaco, "Courier New", monospace;
-    	width: 16px;
-    	margin: 4px;
-    	text-align: left;
-	}
 
-	.data-volt, .data-amp, .data-watt {
-		width: 64px;
-		text-align: right;
-	}
-
-	.data-amp {
-		width: 36px;
-		text-align: right;
-	}
-	
-	.icon-wifi {
-		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cg class='layer'%3E%3Cpath fill='none' d='M0 0h24v24H0V0zm0 0h24v24H0V0z'/%3E%3Cpath d='M.52 9.74a1.6 1.6 0 0 0 2.15.12c5.37-4.42 13.18-4.42 18.56-.01.64.53 1.59.48 2.17-.1.68-.68.63-1.81-.12-2.42C16.71 1.96 7.2 1.96.62 7.33c-.75.6-.81 1.73-.12 2.42zm8.93 8.93 1.69 1.69c.45.45 1.17.45 1.62 0l1.69-1.69c.54-.54.43-1.47-.26-1.83-1.4-.72-3.08-.72-4.5 0-.66.36-.78 1.29-.24 1.83zm-4.29-4.29c.56.56 1.45.62 2.11.15a8.13 8.13 0 0 1 9.39 0c.66.46 1.54.41 2.11-.15l.01-.01c.69-.69.64-1.86-.15-2.43-3.96-2.87-9.36-2.87-13.33 0-.79.58-.84 1.74-.14 2.44z'/%3E%3C/g%3E%3C/svg%3E");
-	}
-	.icon-bluetooth {
-		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xml:space='preserve' width='24' height='24'%3E%3Cpath d='m13.48 12.02 5.01-4.89c.19-.19.3-.44.3-.71s-.11-.52-.3-.71L12.99.35a.967.967 0 0 0-1.07-.2.97.97 0 0 0-.6.91V9.9L6.67 5.36a.993.993 0 0 0-1.4.02.993.993 0 0 0 .02 1.4l5.36 5.23-5.36 5.23c-.39.38-.4 1.01-.02 1.4s1.01.4 1.4.02l4.65-4.54v8.84a.986.986 0 0 0 .98.99c.25 0 .5-.1.69-.28l5.5-5.36c.19-.19.3-.44.3-.71s-.11-.52-.3-.71L13.48 12zm-.19-8.61 3.09 3.02-3.09 3.02V3.42zm0 17.22V14.6l3.09 3.02-3.09 3.02z' class='layer'/%3E%3C/svg%3E");	
-	}
-	.icon-matter {
-		mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath fill='%23231F20' d='M7.17 6.24c1.01.81 2.2 1.35 3.47 1.59V1.06l1.38-.8 1.37.8v6.77c1.28-.24 2.47-.78 3.47-1.59l2.51 1.45a10.46 10.46 0 0 1-14.71 0l2.52-1.45zm3.05 17.3c1.45-5.55-1.83-11.23-7.36-12.74v2.9c1.2.46 2.27 1.22 3.11 2.2L.1 19.29v1.59l1.38.79 5.86-3.38c.44 1.21.56 2.52.36 3.79l2.52 1.46zM21.17 10.8c-5.53 1.52-8.8 7.19-7.36 12.74l2.52-1.46c-.2-1.27-.09-2.57.35-3.79l5.86 3.38 1.38-.79v-1.59l-5.87-3.39c.84-.98 1.91-1.74 3.11-2.2l.01-2.9z' class='layer'/%3E%3C/svg%3E");
-	}
-	.icon {
-		display: inline-block;
-		width: 24px;
-		height: 24px;
-		background: #BEBEBE;
-		mask-size: cover;
-		-webkit-mask-repeat: no-repeat;
-		mask-repeat: no-repeat;
-		mask-position: center;
-		margin: 32px;
-	}
-	.icon:hover,
-	.icon:focus {
-		background: red;
-	}
-</style>
 <head>
-<meta charset="UTF-8">
-<title>Radiator</title>
+ <meta charset="UTF-8">
+ <title>Radiator</title>
+ <link rel="icon" type="image/x-icon" href="/favicon.ico">
+ <script src="index.js" type="text/javascript" defer=""></script>
+ <link rel="stylesheet" type="text/css" href="index.css">
 </head>
+
 <body>
-	<div>
-		<div class="he-card">
-			<h1>Radiator</h1>
-			<div>
-				<button id="button1" class="he-button-off">I</button>
-				<button id="button2" class="he-button-off">II</button>
-			</div>
-			<h2>Temperatuur</h2>
-			<div>
-				<div class="te-input-group">
-					<button class="te-input-button" id="decrement">-</button>
-					<input class="te-input-string" id="input" type="text" value="--.-" readonly>
-					<button class="te-input-button" id="increment">+</button>
-				</div>
-			</div>
-			<div>
-				<table border="0">
-					<tbody>
-						<tr>
-							<td class="te-label">remote</td>
-							<td class="te-label">voor</td>
-							<td class="te-label">boven</td>
-							<td class="te-label">onder</td>
-							<td class="te-label">chip</td>
-						</tr>
-						<tr class="he_mono">
-							<td id="te_rem">--.-</td>
-							<td id="te_frt">--.-</td>
-							<td id="te_top">--.-</td>
-							<td id="te_bot">--.-</td>
-							<td id="te_chp">--.-</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
-			<h3>Data</h3>
-			<div>
-				<table border="0">
-					<tbody>
-						<tr>
-							<td id="volt" class="data data-volt">---.-</td>
-							<td class="data">V</td>
-							<td id="amp" class="data data-amp">-.-</td>
-							<td class="data">A</td>
-							<td id="watt" class="data data-watt">----.-</td>
-							<td class="data">W</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
-			<div>
-				<table border="0">
-					<tbody>
-						<tr>
-							<td id="wifi" class="icon icon-wifi"></td>
-							<td id="blue" class="icon icon-bluetooth"></td>
-							<td id="matt" class="icon icon-matter"></td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
-		</div>
-	</div>
+ <div>
+  <div class="he-card">
+   <h1>Radiator</h1>
+   <div>
+    <button id="button1" class="he-button-off">I</button>
+    <button id="button2" class="he-button-off">II</button>
+   </div>
+   <h2>Temperatuur</h2>
+   <div>
+    <div class="te-input-group">
+     <button class="te-input-button" id="decrement">-</button>
+     <input class="te-input-string" id="input" type="text" value="--.-" readonly>
+     <button class="te-input-button" id="increment">+</button>
+    </div>
+   </div>
+   <div>
+    <table border="0">
+     <tbody>
+      <tr>
+       <td class="te-label">remote</td>
+       <td class="te-label">voor</td>
+       <td class="te-label">boven</td>
+       <td class="te-label">onder</td>
+       <td class="te-label">chip</td>
+      </tr>
+      <tr class="he_mono">
+       <td id="te_rem">--.-</td>
+       <td id="te_frt">--.-</td>
+       <td id="te_top">--.-</td>
+       <td id="te_bot">--.-</td>
+       <td id="te_chp">--.-</td>
+      </tr>
+     </tbody>
+    </table>
+   </div>
+   <h3>Data</h3>
+   <div>
+    <table border="0">
+     <tbody>
+      <tr>
+       <td id="volt" class="data data-volt">---.-</td>
+       <td class="data">V</td>
+       <td id="amp" class="data data-amp">-.-</td>
+       <td class="data">A</td>
+       <td id="watt" class="data data-watt">----.-</td>
+       <td class="data">W</td>
+      </tr>
+     </tbody>
+    </table>
+   </div>
+   <div>
+    <table border="0">
+     <tbody>
+      <tr>
+       <td id="wifi" class="icon icon-wifi"></td>
+       <td id="blue" class="icon icon-bluetooth"></td>
+       <td id="matt" class="icon icon-matter"></td>
+      </tr>
+     </tbody>
+    </table>
+   </div>
+  </div>
+ </div>
 </body>
 
-
-<script>
-	const heat_1 = document.getElementById("button1");
-	const heat_2 = document.getElementById("button2");
-	
-	const inc = document.getElementById("increment");
-	const target = document.getElementById("input");
-	const dec = document.getElementById("decrement");
-
-	const te_rem = document.getElementById("te_rem");
-	const te_frt = document.getElementById("te_frt");
-	const te_top = document.getElementById("te_top");
-	const te_bot = document.getElementById("te_bot");
-	const te_chp = document.getElementById("te_chp");
-
-	const volt = document.getElementById("volt");
-	const amp = document.getElementById("amp");
-
-	const wifi = document.getElementById("wifi");
-	const blue = document.getElementById("blue");
-	const matt = document.getElementById("matt");
-
-
-	var gateway = `ws://${window.location.hostname}/ws`;
-	var websocket;
-
-	function initWebSocket() {
-		console.log('Trying to open a WebSocket connection...');
-		websocket = new WebSocket(gateway);
-		websocket.onopen    = onOpen;
-		websocket.onclose   = onClose;
-		websocket.onmessage = onMessage; // <-- add this line
-	}
-
-	function onOpen(event) {
-		console.log('Connection opened');
-		wifi.style.background = '#00c4fa';
-	}
-
-
-	 function onClose(event) {
-		console.log('Connection closed');
-		wifi.style.background = '#BEBEBE';
-		setTimeout(initWebSocket, 2000);
-	}
-
-	function onMessage(event) {
-
-		switch(event.data.at(0)){
-			case "r":
-				te_rem.innerHTML = event.data.substring(1);
-				break;
-			case "e":
-				te_frt.innerHTML = event.data.substring(1);
-				break;
-			case "t":
-				te_top.innerHTML = event.data.substring(1);
-				break;
-			case "b":
-				te_bot.innerHTML = event.data.substring(1);
-				break;
-			case "c":
-				te_chp.innerHTML = event.data.substring(1);
-				break;
-			case "a":
-				target.value = event.data.substring(1);
-				break;
-			case "i":
-				if(event.data.at(1) == '1') {
-					heat_1.className = 'he-button-on';
-				}else{
-					heat_1.className = 'he-button-off';
-				}
-				break;
-			case "h":
-				if(event.data.at(1) == '1') {
-					heat_2.className = 'he-button-on';
-				}else{
-					heat_2.className = 'he-button-off';
-				}
-				break;
-		}
-	}
-
-	window.addEventListener('load', onLoad);
-
-	function onLoad(event) {
-		initWebSocket();
-		initButtons();
-	}
-      
-	function initButtons() {
-		document.getElementById('button1').addEventListener('click', toggle_one);
-		document.getElementById('button2').addEventListener('click', toggle_two);
-		document.getElementById('decrement').addEventListener('click', decrement);
-		document.getElementById('increment').addEventListener('click', increment);
-	}
-
-	function toggle_one(){
-		websocket.send('I');
-	}
-
-	function toggle_two(){
-		websocket.send('H');
-	}
-
-	function decrement(){
-		websocket.send('D');
-	}
-
-	function increment(){
-		websocket.send('U');
-	}
-</script>
 </html>
