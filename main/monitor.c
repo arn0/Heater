@@ -109,7 +109,7 @@ void monitor_task(){
 bool start_monitor_task(){
 
 	// start internal on-chip temperature sensor
-	// need to go over config details!!!
+	// FIXME: need to go over config details!!!
 	ESP_LOGI(TAG, "Install internal temperature sensor, expected temp ranger range: 10~50 ℃");
 	temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10, 50);
 	ESP_ERROR_CHECK(temperature_sensor_install(&temp_sensor_config, &temp_sensor));
