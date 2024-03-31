@@ -14,6 +14,7 @@
 #include "sntp.h"
 
 static const char *TAG = "sntp";
+bool sntp_started = false;
 bool sntp_valid = false;
 
 
@@ -30,17 +31,28 @@ void timezone_set()
 }
 
 void sntp_client_start(){
-	ESP_LOGI(TAG, "Initializing and starting SNTP");
-	/*
-	 * This is the basic default config with one server and starting the service
-	 */
-	esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG(CONFIG_SNTP_TIME_SERVER);
-	//config.start = false;											// start SNTP service explicitly (after connecting)
-	config.sync_cb = time_sync_notification_cb;     // Note: This is only needed if we want
+	if(sntp_started){
+			ESP_LOGW(TAG, "SNTP already started");
+	} else {
+		ESP_LOGI(TAG, "Initializing and starting SNTP");
+		/*
+		 * This is the basic default config with one server and starting the service
+		 */
+		esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG(CONFIG_SNTP_TIME_SERVER);
+		//config.start = false;											// start SNTP service explicitly (after connecting)
+		config.sync_cb = time_sync_notification_cb;     // Note: This is only needed if we want
 
-	esp_netif_sntp_init(&config);
+		if(esp_netif_sntp_init(&config) == ESP_OK){
+			sntp_started = true;
+		}else{
+			ESP_LOGE(TAG, "Error on starting SNTP");
+		}
+	}
 }
 
 void sntp_client_stop(){
+	sntp_started = false;
+	ESP_LOGI(TAG, "Stopping SNTP");
 	esp_netif_sntp_deinit();
+	sntp_started = false;
 }

@@ -47,7 +47,7 @@ void app_main(void)
 	}
 	ESP_ERROR_CHECK(ret);
 
-	real_time_stats();
+	//real_time_stats();
 	start_heater_task();			// error check here
 	start_monitor_task();
 	lcd_start();
@@ -55,7 +55,7 @@ void app_main(void)
 	start_control_task();
 	clock_start();
 
-	vTaskDelay(pdMS_TO_TICKS(800));		// need a little time before wifi is ready
+	vTaskDelay(pdMS_TO_TICKS(1000));		// need a little time before wifi is ready
 
 	ESP_LOGI(TAG, "Start wifi_init_station()");
 	wifi_init_station();

@@ -22,6 +22,7 @@
 #include "events.h"
 #include "wifi_station.h"
 #include "lvgl_ui.h"
+#include "sntp.h"
 #include "../../secret.h"
 
 #define WIFI_MAXIMUM_RETRY 4
@@ -40,52 +41,111 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 	if (event_base == WIFI_EVENT) {
 		switch (event_id) {
 		case WIFI_EVENT_WIFI_READY: /**< WiFi ready */
-			ESP_LOGI(TAG, "event handler: WIFI_EVENT_WIFI_READY");
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_WIFI_READY");
 			break;
 		case WIFI_EVENT_SCAN_DONE: /**< Finished scanning AP */
-			ESP_LOGI(TAG, "event handler: WIFI_EVENT_SCAN_DONE");
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_SCAN_DONE");
 			break;
 		case WIFI_EVENT_STA_START: /**< Station start */
-			ESP_LOGI(TAG, "event handler: WIFI_EVENT_STA_START");
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_START");
 			esp_wifi_connect();
-			ESP_LOGI(TAG, "event handler: esp_wifi_connect() done");
+			ESP_LOGI(TAG, "wifi event handler: esp_wifi_connect() done");
 			break;
 		case WIFI_EVENT_STA_STOP: /**< Station stop */
-			ESP_LOGI(TAG, "event handler: WIFI_EVENT_STA_STOP");
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_STOP");
 			break;
 		case WIFI_EVENT_STA_CONNECTED: /**< Station connected to AP */
-			ESP_LOGI(TAG, "event handler: WIFI_EVENT_STA_CONNECTED");
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_CONNECTED");
 			s_retry_num = 0;
 			break;
 		case WIFI_EVENT_STA_DISCONNECTED: /**< Station disconnected from AP */
-			ESP_LOGI(TAG, "event handler: WIFI_EVENT_STA_DISCONNECTED");
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_DISCONNECTED");
 			wifi_connected = false;
+			sntp_client_stop();
 			lvgl_ui_update();
 			if (s_retry_num < WIFI_MAXIMUM_RETRY) {
 				vTaskDelay(pdMS_TO_TICKS(WIFI_SHORT_DELAY_MS));
 				esp_wifi_connect();
-				ESP_LOGI(TAG, "event handler: esp_wifi_connect() done, retry %d", s_retry_num);
+				ESP_LOGI(TAG, "wifi event handler: esp_wifi_connect() done, retry %d", s_retry_num);
 				s_retry_num++;
 			} else {
 				vTaskDelay(pdMS_TO_TICKS(WIFI_LONG_DELAY_MS));
 				esp_wifi_connect();
-				ESP_LOGI(TAG, "event handler: esp_wifi_connect() done, retry %d", s_retry_num);
+				ESP_LOGI(TAG, "wifi event handler: esp_wifi_connect() done, retry %d", s_retry_num);
 
 				//xEventGroupSetBits(s_wifi_event_group, WIFI_DISCONNECTED_BIT);
 				//ESP_LOGI(TAG, "event handler: xEventGroupSetBits(s_wifi_event_group, WIFI_DISCONNECTED_BIT) done");
 				//s_retry_num = 0;
 			}
-			ESP_LOGI(TAG, "event handler: connect to the AP failed");
+			ESP_LOGI(TAG, "wifi event handler: connect to the AP failed");
 			break;
 		case WIFI_EVENT_STA_AUTHMODE_CHANGE: /**< the auth mode of AP connected by device's station changed */
-			ESP_LOGI(TAG, "event handler: WIFI_EVENT_STA_AUTHMODE_CHANGE");
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_AUTHMODE_CHANGE");
+			break;
+		case WIFI_EVENT_STA_WPS_ER_SUCCESS: /**< Station wps succeeds in enrollee mode */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_WPS_ER_SUCCESS");
+			break;
+		case WIFI_EVENT_STA_WPS_ER_FAILED: /**< Station wps fails in enrollee mode */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_WPS_ER_FAILED");
+			break;
+		case WIFI_EVENT_STA_WPS_ER_TIMEOUT: /**< Station wps timeout in enrollee mode */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_WPS_ER_TIMEOUT");
+			break;
+		case WIFI_EVENT_STA_WPS_ER_PIN: /**< Station wps pin code in enrollee mode */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_WPS_ER_PIN");
+			break;
+		case WIFI_EVENT_STA_WPS_ER_PBC_OVERLAP:  /**< Station wps overlap in enrollee mode */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_WPS_ER_PBC_OVERLAP");
+			break;
+		case WIFI_EVENT_AP_START: /**< Soft-AP start */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_AP_START");
+			break;
+		case WIFI_EVENT_AP_STOP: /**< Soft-AP stop */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_AP_STOP");
+			break;
+		case WIFI_EVENT_AP_STACONNECTED: /**< a station connected to Soft-AP */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_AP_STACONNECTED");
+			break;
+		case WIFI_EVENT_AP_STADISCONNECTED: /**< a station disconnected from Soft-AP */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_AP_STADISCONNECTED");
+			sntp_client_stop();
+			break;
+		case WIFI_EVENT_AP_PROBEREQRECVED: /**< Receive probe request packet in soft-AP interface */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_AP_PROBEREQRECVED");
+			break;
+		case WIFI_EVENT_FTM_REPORT: /**< Receive report of FTM procedure */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_FTM_REPORT");
+			break;
+		case WIFI_EVENT_STA_BSS_RSSI_LOW: /**< AP's RSSI crossed configured threshold */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_BSS_RSSI_LOW");
+			break;
+		case WIFI_EVENT_ACTION_TX_STATUS: /**< Status indication of Action Tx operation */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ACTION_TX_STATUS");
+			break;
+		case WIFI_EVENT_ROC_DONE: /**< Remain-on-Channel operation complete */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ROC_DONE");
+			break;
+		case WIFI_EVENT_STA_BEACON_TIMEOUT: /**< Station beacon timeout */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_BEACON_TIMEOUT");
+			break;
+		case WIFI_EVENT_ITWT_SETUP: /**< iTWT setup */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ITWT_SETUP");
+			break;
+		case WIFI_EVENT_ITWT_TEARDOWN: /**< iTWT teardown */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ITWT_TEARDOWN");
+			break;
+		case WIFI_EVENT_ITWT_PROBE: /**< iTWT probe */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ITWT_PROBE");
+			break;
+		case WIFI_EVENT_ITWT_SUSPEND: /**< iTWT suspend */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ITWT_SUSPEND");
 			break;
 		default:
-			ESP_LOGI(TAG, "event handler: event_id = %lx", event_id);
+			ESP_LOGI(TAG, "wifi event handler: event_id = %lx", event_id);
 			break;
 		}
 	} else {
-		ESP_LOGE(TAG, "event handler: event_base = %s ", event_base);
+		ESP_LOGE(TAG, "wifi event handler: event_base = %s ", event_base);
 	}
 }
 
@@ -94,43 +154,43 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
 	if (event_base == IP_EVENT) {
 		switch (event_id) {
 		case IP_EVENT_STA_GOT_IP: /*!< station got IP from connected AP */
-			ESP_LOGI(TAG, "event handler: IP_EVENT_STA_GOT_IP");
+			ESP_LOGI(TAG, "ip event handler: IP_EVENT_STA_GOT_IP");
 			ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-			ESP_LOGI(TAG, "event handler: got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+			ESP_LOGI(TAG, "ip event handler: got ip:" IPSTR, IP2STR(&event->ip_info.ip));
 			s_retry_num = 0;
 			xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
 			wifi_connected = true;
 			lvgl_ui_update();
 			break;
 		case IP_EVENT_STA_LOST_IP: /*!< station lost IP and the IP is reset to 0 */
-			ESP_LOGI(TAG, "event handler: IP_EVENT_STA_LOST_IP");
+			ESP_LOGI(TAG, "ip event handler: IP_EVENT_STA_LOST_IP");
 			wifi_connected = false;
 			lvgl_ui_update();
 			break;
 		case IP_EVENT_AP_STAIPASSIGNED: /*!< soft-AP assign an IP to a connected station */
-			ESP_LOGI(TAG, "event handler: IP_EVENT_AP_STAIPASSIGNED");
+			ESP_LOGI(TAG, "ip event handler: IP_EVENT_AP_STAIPASSIGNED");
 			break;
 		case IP_EVENT_GOT_IP6: /*!< station or ap or ethernet interface v6IP addr is preferred */
-			ESP_LOGI(TAG, "event handler: IP_EVENT_GOT_IP6");
+			ESP_LOGI(TAG, "ip event handler: IP_EVENT_GOT_IP6");
 			break;
 		case IP_EVENT_ETH_GOT_IP: /*!< ethernet got IP from connected AP */
-			ESP_LOGI(TAG, "event handler: IP_EVENT_ETH_GOT_IP");
+			ESP_LOGI(TAG, "ip event handler: IP_EVENT_ETH_GOT_IP");
 			break;
 		case IP_EVENT_ETH_LOST_IP: /*!< ethernet lost IP and the IP is reset to 0 */
-			ESP_LOGI(TAG, "event handler: IP_EVENT_ETH_LOST_IP");
+			ESP_LOGI(TAG, "ip event handler: IP_EVENT_ETH_LOST_IP");
 			break;
 		case IP_EVENT_PPP_GOT_IP: /*!< PPP interface got IP */
-			ESP_LOGI(TAG, "event handler: IP_EVENT_PPP_GOT_IP");
+			ESP_LOGI(TAG, "ip event handler: IP_EVENT_PPP_GOT_IP");
 			break;
 		case IP_EVENT_PPP_LOST_IP: /*!< PPP interface lost IP */
-			ESP_LOGI(TAG, "event handler: IP_EVENT_PPP_LOST_IP");
+			ESP_LOGI(TAG, "ip event handler: IP_EVENT_PPP_LOST_IP");
 			break;
 		default:
-			ESP_LOGI(TAG, "event handler: event_id %ld", event_id);
+			ESP_LOGI(TAG, "ip event handler: event_id %ld", event_id);
 			break;
 		}
 	} else {
-		ESP_LOGE(TAG, "event handler: event_base = %s ", event_base);
+		ESP_LOGE(TAG, "ip event handler: event_base = %s ", event_base);
 	}
 }
 
