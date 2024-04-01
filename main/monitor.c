@@ -10,6 +10,8 @@
 #include "task_priorities"
 #include "heater_task.h"
 #include "lvgl_ui.h"
+#include "logger.h"
+#include "monitor.h"
 
 #define HEATER_ONEWIRE_MAX_DS18B20 3							// No more then 3 installed
 
@@ -31,11 +33,12 @@ ds18b20_device_handle_t t_sensor_bot = NULL;
 
 int ds18b20_device_num = 0;										// number of ds18b20 devices found
 
+time_t log_saved_time, log_update_time, now;
+
 void monitor_task(){
 	TickType_t xPreviousWakeTime;
 	const TickType_t xTimeIncrement = pdMS_TO_TICKS(MONITOR_TASK_DELAY_MS);
 	BaseType_t xWasDelayed;
-//	float *temperature;
 	int step = 0;
 
 	xPreviousWakeTime = xTaskGetTickCount ();					// Initialise the xPreviousWakeTime variable with the current time
@@ -91,6 +94,18 @@ void monitor_task(){
 				if(t_sensor_bot){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bot, &heater_status.bot));
 					heater_status.web |= BOT_W_FL;
+				}
+				break;
+
+			case 7:
+				time(&now);
+				if(now > log_update_time + 60){
+					log_add();
+					log_update_time = now;
+				}
+				if(now > log_saved_time + 60*10){
+					//log_save();
+					log_saved_time = now;
 				}
 				break;
 
@@ -156,6 +171,10 @@ bool start_monitor_task(){
 	t_sensor_env = ds18b20s[0];
 	t_sensor_top = ds18b20s[1];
 	t_sensor_bot = ds18b20s[2];
+
+	time(&log_saved_time);
+	log_update_time = log_saved_time;
+	//log_read();
 
 	xTaskCreate( monitor_task, "monitor", 4096, NULL, MONITOR_TASK_PRIORITY, NULL );
 

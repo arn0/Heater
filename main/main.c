@@ -22,6 +22,7 @@
 #include "sntp.h"
 #include "webmdns.h"
 #include "events.h"
+#include "mount.h"
 #include "webserver.h"
 #include "gpio_pins.h"
 #include "rgb_led.h"
@@ -47,6 +48,8 @@ void app_main(void)
 	}
 	ESP_ERROR_CHECK(ret);
 
+	ESP_ERROR_CHECK( spiffs_init( "/data") );				// Initialize SPIFFS which holds the HTML/CSS/JS files we serve to client browser
+																		// and to store statistics file
 	//real_time_stats();
 	start_heater_task();			// error check here
 	start_monitor_task();
