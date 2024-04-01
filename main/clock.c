@@ -11,7 +11,6 @@
 #include "lvgl_ui.h"
 
 
-time_t previous = 0, now;
 char strftime_buf[64];
 struct tm timeinfo;
 
@@ -23,8 +22,9 @@ void clock_task()
 	TickType_t xPreviousWakeTime;
 	const TickType_t xTimeIncrement = pdMS_TO_TICKS(CLOCK_TASK_DELAY_MS);
 	BaseType_t xWasDelayed;
+	time_t now;
 
-	xPreviousWakeTime = xTaskGetTickCount ();									// Initialise the xPreviousWakeTime variable with the current time.
+	xPreviousWakeTime = xTaskGetTickCount ();											// Initialise the xPreviousWakeTime variable with the current time.
 
 	do {
 		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );	// Wait for the next cycle.
@@ -34,11 +34,9 @@ void clock_task()
 		}
 
 		time(&now);
-		if(now > previous){
-			localtime_r(&now, &timeinfo);
-			strftime(strftime_buf, sizeof(strftime_buf), "%k:%M:%S", &timeinfo);
-			lvgl_ui_update();													// update display
-		}
+		localtime_r(&now, &timeinfo);
+		strftime(strftime_buf, sizeof(strftime_buf), "%k:%M:%S", &timeinfo);
+		lvgl_ui_update();																	// update display
   }while (true);
 }
 

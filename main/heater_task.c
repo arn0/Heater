@@ -20,10 +20,9 @@
 
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<HEATER_SSR_ONE_GPIO) | (1ULL<<HEATER_SSR_TWO_GPIO))
 
-
 static const char *TAG = "heaters";
 
-struct heat_stat heater_status;										// global access to heater staus
+struct heater_status heater_status;										// global access to heater staus
 
 
 void heater_task() {
@@ -48,17 +47,17 @@ void heater_task() {
 		if( heater_status.safe ) {
 			if( tick ){
 				tick = false;
-				if( heater_status.one_d != heater_status.one_s ){
-					heater_status.one_s = heater_status.one_d;
+				if( heater_status.one_set != heater_status.one_pwr ){
+					heater_status.one_pwr = heater_status.one_set;
 					heater_status.web |= ONE_W_FL;
-					gpio_set_level( HEATER_SSR_ONE_GPIO, heater_status.one_s );
+					gpio_set_level( HEATER_SSR_ONE_GPIO, heater_status.one_pwr );
 				}
 			} else {
 				tick = true;
-				if( heater_status.two_d != heater_status.two_s ){
-					heater_status.two_s = heater_status.two_d;
+				if( heater_status.two_set != heater_status.two_pwr ){
+					heater_status.two_pwr = heater_status.two_set;
 					heater_status.web |= TWO_W_FL;
-					gpio_set_level( HEATER_SSR_TWO_GPIO, heater_status.two_s );
+					gpio_set_level( HEATER_SSR_TWO_GPIO, heater_status.two_pwr );
 				}
 			}
 		} else {
@@ -72,7 +71,7 @@ void heater_task() {
  * previously stored target temperature
  * all available temperature sensors
  * heater solid state relais
-*/
+ */
 
 bool start_heater_task(){
 
@@ -84,11 +83,11 @@ bool start_heater_task(){
 
 	gpio_config_t io_conf = {};							//zero-initialize the config structure
 	io_conf.intr_type = GPIO_INTR_DISABLE;				//disable interrupt
-	io_conf.mode = GPIO_MODE_OUTPUT;						//set as output mode
-	io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;		//bit mask of the pins that you want to set, e.g. GPIO18/19
-	io_conf.pull_down_en = 0;								//disable pull-down mode
-	io_conf.pull_up_en = 0;									//disable pull-up mode
-	ret = gpio_config(&io_conf);							//configure GPIO with the given settings
+	io_conf.mode = GPIO_MODE_OUTPUT;					//set as output mode
+	io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;			//bit mask of the pins that you want to set, e.g. GPIO18/19
+	io_conf.pull_down_en = 0;							//disable pull-down mode
+	io_conf.pull_up_en = 0;								//disable pull-up mode
+	ret = gpio_config(&io_conf);						//configure GPIO with the given settings
 	if( ret != ESP_OK ){
 		ESP_ERROR_CHECK(ret);
 		return(false);
@@ -105,10 +104,10 @@ bool start_heater_task(){
 	}
 
 	heater_status.safe = false;							// initialize heater status
-	heater_status.one_s = false;
-	heater_status.two_s =false;
-	heater_status.one_d = false;
-	heater_status.two_d = false;
+	heater_status.one_pwr = false;
+	heater_status.two_pwr =false;
+	heater_status.one_set = false;
+	heater_status.two_set = false;
 	heater_status.target = 20;
 	
 	// Now we start the heater contol loop

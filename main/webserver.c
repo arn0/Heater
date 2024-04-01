@@ -216,11 +216,11 @@ void send_sensor_update(){
 				send_sensor_update_frame();
 			}else if( heater_status.web & ONE_W_FL ){
 				heater_status.web &= ~ONE_W_FL;
-				sprintf( sendBuf, "i%d", heater_status.one_s );
+				sprintf( sendBuf, "i%d", heater_status.one_pwr );
 				send_sensor_update_frame();
 			}else if( heater_status.web & TWO_W_FL ){
 				heater_status.web &= ~TWO_W_FL;
-				sprintf( sendBuf, "h%d", heater_status.two_s );
+				sprintf( sendBuf, "h%d", heater_status.two_pwr );
 				send_sensor_update_frame();
 			}
 		}
@@ -291,12 +291,12 @@ static esp_err_t get_ws_handler( httpd_req_t *req )
 					break;
 
 				case 'I':
-					heater_status.one_d = !heater_status.one_d;
+					heater_status.one_set = !heater_status.one_set;
 					heater_status.web |= ONE_W_FL;
 					break;
 
 				case 'H':
-					heater_status.two_d = !heater_status.two_d;
+					heater_status.two_set = !heater_status.two_set;
 					heater_status.web |= TWO_W_FL;
 					break;
 			}
@@ -492,8 +492,6 @@ httpd_handle_t start_webserver(void)
     }
     strlcpy(server_data->base_path, base_path,
             sizeof(server_data->base_path));
-
-	ESP_ERROR_CHECK( spiffs_init( "/data") );				// Initialize SPIFFS which holds the HTML/CSS/JS files we serve to client browser
 	
 	ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
 	if (httpd_start(&server, &config) == ESP_OK) {			// Start the httpd server

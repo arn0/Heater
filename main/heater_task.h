@@ -1,10 +1,16 @@
+#ifndef HEATER_TASK_H
+#define HEATER_TASK_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct heat_dat {
 	float val;
 	bool web;
 	bool dsp;
 	bool mat;
 };
-
 
 #define TAR_W_FL 0b1
 #define CHP_W_FL 0b10
@@ -17,9 +23,7 @@ struct heat_dat {
 #define ONE_W_FL 0b100000000
 #define TWO_W_FL 0b1000000000
 
-
-
-struct heat_stat {
+struct heater_status {
 	float target;
 	float env;
 	float bot;
@@ -29,15 +33,20 @@ struct heat_stat {
 	float volt;
 	float curr;
 	unsigned int web;
-	bool one_s;
-	bool one_d;
-	bool two_s;
-	bool two_d;
+	bool one_pwr;
+	bool one_set;
+	bool two_pwr;
+	bool two_set;
 	bool safe;
 };
 
 // global access to heater staus
-extern struct heat_stat heater_status;
-
+extern struct heater_status heater_status;
 
 bool start_heater_task();
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif //HEATER_TASK_H

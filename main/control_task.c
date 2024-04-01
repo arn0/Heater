@@ -41,17 +41,17 @@ void control_task(){
 
 		delta = heater_status.target - heater_status.env;
 		if( delta <= 0 ){
-			heater_status.one_d = false;
-			heater_status.two_d = false;
+			heater_status.one_set = false;
+			heater_status.two_set = false;
 		} else if( delta > 0.6 ) {
-			heater_status.one_d = true;
-			heater_status.two_d = true;
+			heater_status.one_set = true;
+			heater_status.two_set = true;
 		} else if( delta > 0.3 ) {
-			heater_status.one_d = false;
-			heater_status.two_d = true;
+			heater_status.one_set = false;
+			heater_status.two_set = true;
 		} else {
-			heater_status.one_d = true;
-			heater_status.two_d = false;
+			heater_status.one_set = true;
+			heater_status.two_set = false;
 		}
 	}while (true);
 }
@@ -62,8 +62,8 @@ bool start_control_task(){
 	// First thing to do considering safety:
 	// turn the heaters OFF
 
-	heater_status.one_d = false;
-	heater_status.two_d = false;
+	heater_status.one_set = false;
+	heater_status.two_set = false;
 	heater_status.safe = false;
 
 	// Now we start the contol loop
