@@ -13,7 +13,7 @@
 #include "esp_spiffs.h"
 #include "esp_log.h"
 
-#include "heater_task.h"
+#include "heater.h"
 #include "logger.h"
 
 static const char *TAG = "logger";

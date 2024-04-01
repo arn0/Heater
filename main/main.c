@@ -15,8 +15,8 @@
 #include "time.h"
 #include "esp_wifi.h"
 
-#include "heater_task.h"
-#include "control_task.h"
+#include "heater.h"
+#include "control.h"
 #include "monitor.h"
 #include "wifi_station.h"
 #include "sntp.h"

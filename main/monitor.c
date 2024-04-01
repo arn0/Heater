@@ -8,7 +8,7 @@
 
 #include "gpio_pins.h"
 #include "task_priorities"
-#include "heater_task.h"
+#include "heater.h"
 #include "lvgl_ui.h"
 #include "logger.h"
 #include "monitor.h"

@@ -13,7 +13,7 @@
 #include "lvgl.h"
 
 #include "task_priorities"
-#include "heater_task.h"
+#include "heater.h"
 #include "clock.h"
 #include "logger.h"
 #include "lvgl_ui.h"

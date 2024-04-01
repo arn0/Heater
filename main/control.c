@@ -4,8 +4,8 @@
 #include "esp_log.h"
 
 #include "task_priorities"
-#include "control_task.h"
-#include "heater_task.h"
+#include "control.h"
+#include "heater.h"
 #include "lvgl_ui.h"
 
 

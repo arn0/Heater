@@ -15,7 +15,7 @@
 
 #include "mount.h"
 #include "task_priorities"
-#include "heater_task.h"
+#include "heater.h"
 
 #define HEATER_WEB_STEP 0.5
 

@@ -1,5 +1,5 @@
-#ifndef CONTROL_TASK_H
-#define CONTROL_TASK_H
+#ifndef CONTROL_H
+#define CONTROL_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -11,4 +11,4 @@ bool start_control_task();
 }
 #endif
 
-#endif //CONTROL_TASK_H
+#endif //CONTROL_H

@@ -5,7 +5,7 @@
 #include "esp_log.h"
 
 #include "gpio_pins.h"
-#include "heater_task.h"
+#include "heater.h"
 #include "task_priorities"
 #include "lvgl_ui.h"
 

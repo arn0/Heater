@@ -1,5 +1,5 @@
-#ifndef HEATER_TASK_H
-#define HEATER_TASK_H
+#ifndef HEATER_H
+#define HEATER_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,4 +49,4 @@ bool start_heater_task();
 }
 #endif
 
-#endif //HEATER_TASK_H
+#endif //HEATER_H
