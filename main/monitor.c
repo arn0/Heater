@@ -135,7 +135,7 @@ bool start_monitor_task(){
 
 	// install 1-wire bus
 	onewire_bus_handle_t bus = NULL;
-	onewire_bus_config_t bus_config = { .bus_gpio_num = HEATER_ONEWIRE_BUS_GPIO,    };
+	onewire_bus_config_t bus_config = { .bus_gpio_num = ONEWIRE_BUS_GPIO,    };
 	
 	// 1 byte ROM command + 8 byte ROM number + 1 byte device command
 	onewire_bus_rmt_config_t rmt_config = { .max_rx_bytes = 10,     };
