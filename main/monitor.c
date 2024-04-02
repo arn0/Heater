@@ -5,6 +5,7 @@
 #include "driver/temperature_sensor.h"
 #include "ds18b20.h"
 #include "onewire_bus.h"
+#include "pzem004tv3.h"
 
 #include "gpio_pins.h"
 #include "task_priorities"
@@ -33,6 +34,16 @@ ds18b20_device_handle_t t_sensor_bot = NULL;
 
 int ds18b20_device_num = 0;										// number of ds18b20 devices found
 
+/* @brief Set ESP32 Serial Configuration for PZEM*/
+pzem_setup_t pzConf =
+{
+    .pzem_uart   = UART_NUM_1,              /*  <== Specify the UART you want to use, UART_NUM_0, UART_NUM_1, UART_NUM_2 (ESP32 specific) */
+    .pzem_rx_pin = GPIO_NUM_16,             /*  <== GPIO for RX */
+    .pzem_tx_pin = GPIO_NUM_17,             /*  <== GPIO for TX */
+    .pzem_addr   = PZ_DEFAULT_ADDRESS,      /*  If your module has a different address, specify here or update the variable in pzem004tv3.h */
+};
+_current_values_t pzValues;            		  /* Measured values */
+
 time_t log_saved_time, log_update_time, now;
 
 void monitor_task(){
@@ -49,7 +60,15 @@ void monitor_task(){
 		if( xWasDelayed == pdFALSE ) {
 			ESP_LOGW(TAG, "Task was not delayed");
 		}
-		
+
+      if(PzemGetValues( &pzConf, &pzValues )){
+			heater_status.voltage = pzValues.voltage;
+			heater_status.current = pzValues.current;
+			heater_status.power = pzValues.power;
+			heater_status.energy = pzValues.energy;
+			heater_status.pf = pzValues.pf;
+		}
+
 		switch( step++ ) {
 			case 0:
 				// chip temperature reading
@@ -171,6 +190,9 @@ bool start_monitor_task(){
 	t_sensor_env = ds18b20s[0];
 	t_sensor_top = ds18b20s[1];
 	t_sensor_bot = ds18b20s[2];
+
+	
+   PzemInit( &pzConf );     /* Initialize/Configure UART */
 
 	time(&log_saved_time);
 	log_update_time = log_saved_time;

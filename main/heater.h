@@ -5,12 +5,12 @@
 extern "C" {
 #endif
 
-struct heat_dat {
-	float val;
-	bool web;
-	bool dsp;
-	bool mat;
-};
+//struct heat_dat {
+//	float val;
+//	bool web;
+//	bool dsp;
+//	bool mat;
+//};
 
 #define TAR_W_FL 0b1
 #define CHP_W_FL 0b10
@@ -30,8 +30,11 @@ struct heater_status {
 	float top;
 	float chip;
 	float rem;
-	float volt;
-	float curr;
+   float voltage;
+   float current;
+   float power;            // Active Power P. or Real Power W.
+   float energy;
+   float pf;               // Ratio of active to apparent power, cos(fi), eg pf = 0.77, 77% of current is doing the real work
 	unsigned int web;
 	bool one_pwr;
 	bool one_set;

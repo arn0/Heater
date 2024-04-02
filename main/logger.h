@@ -18,8 +18,11 @@ struct snapshot {
 	float top;
 	float chip;
 	float rem;
-	float volt;
-	float curr;
+   float voltage;
+   float current;
+   float power;            // Active Power P. or Real Power W.
+   float energy;
+   float pf;               // Ratio of active to apparent power, cos(fi), eg pf = 0.77, 77% of current is doing the real work
 	uint16_t web;
 	bool one_set : 1;
 	bool one_pwr : 1;
