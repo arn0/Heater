@@ -2,7 +2,7 @@
 #include <string.h>
 #include "esp_log.h"
 #include "esp_err.h"
-#include "esp_vfs_fat.h"
+//#include "esp_vfs_fat.h"
 #include "esp_spiffs.h"
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
