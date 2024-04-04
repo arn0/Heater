@@ -3,6 +3,7 @@
 
 <head>
  <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
  <title>Radiator</title>
  <link rel="icon" type="image/x-icon" href="/favicon.ico">
  <script src="index.js" type="text/javascript" defer=""></script>
@@ -10,69 +11,37 @@
 </head>
 
 <body>
- <div>
-  <div class="he-card">
-   <h1>Radiator</h1>
-   <div>
-    <button id="button1" class="he-button-off">I</button>
-    <button id="button2" class="he-button-off">II</button>
-   </div>
-   <h2>Temperatuur</h2>
-   <div>
-    <div class="te-input-group">
-     <button class="te-input-button" id="decrement">-</button>
-     <input class="te-input-string" id="input" type="text" value="--.-" readonly>
-     <button class="te-input-button" id="increment">+</button>
+  <div>
+    <h1>Radiator</h1>
+    <div class="indicators">
+      <div id="indicator1" class="indicator-off">I</div>
+      <div id="indicator2" class="indicator-off">II</div>
     </div>
-   </div>
-   <div>
-    <table border="0">
-     <tbody>
-      <tr>
-       <td class="te-label">remote</td>
-       <td class="te-label">voor</td>
-       <td class="te-label">boven</td>
-       <td class="te-label">onder</td>
-       <td class="te-label">chip</td>
-      </tr>
-      <tr class="he_mono">
-       <td id="te_rem">--.-</td>
-       <td id="te_frt">--.-</td>
-       <td id="te_top">--.-</td>
-       <td id="te_bot">--.-</td>
-       <td id="te_chp">--.-</td>
-      </tr>
-     </tbody>
-    </table>
-   </div>
-   <h3>Data</h3>
-   <div>
-    <table border="0">
-     <tbody>
-      <tr>
-       <td id="volt" class="data data-volt">---.-</td>
-       <td class="data">V</td>
-       <td id="amp" class="data data-amp">-.-</td>
-       <td class="data">A</td>
-       <td id="watt" class="data data-watt">----.-</td>
-       <td class="data">W</td>
-      </tr>
-     </tbody>
-    </table>
-   </div>
-   <div>
-    <table border="0">
-     <tbody>
-      <tr>
-       <td id="wifi" class="icon icon-wifi"></td>
-       <td id="blue" class="icon icon-bluetooth"></td>
-       <td id="matt" class="icon icon-matter"></td>
-      </tr>
-     </tbody>
-    </table>
-   </div>
+    <h2>Temperatuur</h2>
+    <div class="buttons">
+      <button id="decrement">-</button>
+      <button id="input" >--.-</button>
+      <button id="increment">+</button>
+    </div>
+    <div class="datarow">
+      <div>remote<br><div id="te_rem">--.-</div></div>
+      <div>voor<br><div id="te_frt">--.-</div></div>
+      <div>boven<br><div id="te_top">--.-</div></div>
+      <div>onder<br><div id="te_bot">--.-</div></div>
+      <div>chip<br><div id="te_chp">--.-</div></div>
+    </div>
+    <h2>Data</h2>
+    <div class="datarow">
+      <div>V<br><div id="volt">---.-</div></div>
+      <div>A<br><div id="amp">-.-</div></div>
+      <div>W<br><div id="watt">----.-</div></div>
+      <div>kWh<br><div id="kwh">----.-</div></div>
+      <div>PF<br><div id="pf">-.---</div></div>
+    </div>
+    <div class="icons">
+      <div id="wifi" class="icon icon-wifi"></div>
+      <div id="blue" class="icon icon-bluetooth"></div>
+      <div id="matt" class="icon icon-matter"></div>
+    </div>
   </div>
- </div>
-</body>
-
 </html>

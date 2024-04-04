@@ -1,5 +1,5 @@
-const heat_1 = document.getElementById("button1");
-const heat_2 = document.getElementById("button2");
+const indicator1 = document.getElementById("indicator1");
+const indicator2 = document.getElementById("indicator2");
 
 const inc = document.getElementById("increment");
 const target = document.getElementById("input");
@@ -21,6 +21,8 @@ const matt = document.getElementById("matt");
 
 var gateway = `ws://${window.location.hostname}/ws`;
 var websocket;
+var temp;
+var update;
 
 function initWebSocket() {
  console.log('Trying to open a WebSocket connection...');
@@ -43,8 +45,16 @@ function onOpen(event) {
 }
 
 function onMessage(event) {
+  if(Object.keys(event.data).length > 50)
+  {
+  update = JSON.parse(event.data);
+  //temp=event.data;
+  console.log(event.data);
+  volt.textContent = update.voltage.toFixed(1);
+  amp.textContent = update.current;
+  }
 
- switch(event.data.at(0)){
+  switch(event.data.at(0)){
   case "r":
    te_rem.innerHTML = event.data.substring(1);
    break;
@@ -61,20 +71,20 @@ function onMessage(event) {
    te_chp.innerHTML = event.data.substring(1);
    break;
   case "a":
-   target.value = event.data.substring(1);
+   target.textContent = event.data.substring(1);
    break;
   case "i":
    if(event.data.at(1) == '1') {
-    heat_1.className = 'he-button-on';
+    indicator1.className = 'indicator-on';
    }else{
-    heat_1.className = 'he-button-off';
+    indicator1.className = 'indicator-off';
    }
    break;
   case "h":
    if(event.data.at(1) == '1') {
-    heat_2.className = 'he-button-on';
+    indicator2.className = 'indicator-on';
    }else{
-    heat_2.className = 'he-button-off';
+    indicator2.className = 'indicator-off';
    }
    break;
  }
@@ -88,18 +98,8 @@ function onLoad(event) {
 }
      
 function initButtons() {
- document.getElementById('button1').addEventListener('click', toggle_one);
- document.getElementById('button2').addEventListener('click', toggle_two);
  document.getElementById('decrement').addEventListener('click', decrement);
  document.getElementById('increment').addEventListener('click', increment);
-}
-
-function toggle_one(){
- websocket.send('I');
-}
-
-function toggle_two(){
- websocket.send('H');
 }
 
 function decrement(){
