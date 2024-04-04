@@ -100,7 +100,7 @@ void example_lvgl_demo_ui(lv_disp_t *disp)
 {
 	font_large = &lv_font_montserrat_46;
 	font_normal = LV_FONT_DEFAULT;
-	font_small = &lv_font_montserrat_14;
+	font_small = &lv_font_montserrat_16;
 
 	lv_style_init(&style_t_large);
 	lv_style_set_text_font(&style_t_large, font_large);
