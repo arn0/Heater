@@ -55,7 +55,7 @@ char response_data[4096];
 #define readBufSize 1024*16
 static char readBuf[readBufSize];
 
-#define sendBufSize 256
+#define sendBufSize 256*4
 static char sendBuf[sendBufSize];
 
 
@@ -155,20 +155,20 @@ void socket_close_cleanup(void* context){
   websock_client.descriptor = 0;
 }
 
-esp_err_t send_sensor_update_frame(int8_t *buffer){
+esp_err_t send_sensor_update_frame(char *buffer){
 	httpd_ws_frame_t ws_frame = {
 		.final = true,
 		.fragmented = false,
 		.type = HTTPD_WS_TYPE_TEXT,
 		.payload = (uint8_t*)buffer,
-		.len = strlen(buffer)+1
+		.len = strlen(buffer)
 	};
 
 	ESP_ERROR_CHECK(httpd_ws_send_frame_async( websock_client.handle, websock_client.descriptor, &ws_frame ));
   return ESP_OK;
 }
 
-int16_t do_checksum(uint8_t *buffer, size_t size){
+int16_t do_checksum(int8_t *buffer, size_t size){
 	int16_t sum = 0;
 
 	for (size_t i = 0; i < size; i++)
@@ -178,52 +178,23 @@ int16_t do_checksum(uint8_t *buffer, size_t size){
 	return(sum);
 }
 
-#ifdef FALSE
-void print_block(uint8_t *block, size_t size){
-	char string[256];
-	memset(string, 0, size);
-	for (size_t i = 0; i < size; i++)
-	{
-		snprintf(string + strlen(string), sizeof(string) - strlen(string), "%02x", block[i]);
-		if(!(i % 8) && (i > 0)){
-			snprintf(string + strlen(string), sizeof(string) - strlen(string), " ");
-		}
-	}
-	ESP_LOGI(TAG, "block: %s ", string);
-}
-#endif
-
 time_t time_last_log = 0;
 int16_t checksum_last = 0;
 
-#ifdef DEBUG_JSON
-
 /*
- *	Test JSON output tp websocket
+ * Send updates to client
  */
 
-void test_json(){
+void send_sensor_update(){
+	TickType_t xPreviousWakeTime;
+	const TickType_t xTimeIncrement = pdMS_TO_TICKS(WS_UPDATE_TASK_DELAY_MS);
+	BaseType_t xWasDelayed;
 	time_t now;
 	int16_t checksum;
-
-	time(&now);
-	if(now < (time_last_log + 1)){				// Max 1 packet per second
-		return;
-	}
-	time_last_log = now;
-
-	checksum = do_checksum((uint8_t *) &heater_status, sizeof(heater_status));		// Check if status has changed
-	if(checksum_last == checksum){
-		return;																								// No need to send
-	}
-
-	ESP_LOGI(TAG, "checksum: %x checksum_last %x", checksum, checksum_last);
-	checksum_last = checksum;
-
-	ESP_LOGI(TAG, "Serialize.....");
 	cJSON *root;
+	char *json_string;
+
 	root = cJSON_CreateObject();
-	//cJSON_AddStringToObject(root, "time", now);
 	cJSON_AddNumberToObject(root, "time", now);
 	cJSON_AddNumberToObject(root, "target", heater_status.target);
 	cJSON_AddNumberToObject(root, "env", heater_status.env);
@@ -242,32 +213,6 @@ void test_json(){
 	cJSON_AddBoolToObject(root, "two_set", heater_status.two_set);
 	cJSON_AddBoolToObject(root, "two_pwr", heater_status.two_pwr);
 	cJSON_AddBoolToObject(root, "safe", heater_status.safe);
-	char *my_json_string = cJSON_Print(root);
-	ESP_LOGI(TAG, "my_json_string\n%s",my_json_string);
-	cJSON_Delete(root);
-}
-
-#endif
-
-
-
-
-
-
-
-
-/*
- * Send updates to client
- */
-
-void send_sensor_update(){
-	TickType_t xPreviousWakeTime;
-	const TickType_t xTimeIncrement = pdMS_TO_TICKS(WS_UPDATE_TASK_DELAY_MS);
-	BaseType_t xWasDelayed;
-	time_t now;
-	int16_t checksum;
-	cJSON *root;
-	char *json_string;
 
 	// Initialise the xLastWakeTime variable with the current time.
 	xPreviousWakeTime = xTaskGetTickCount ();
@@ -280,39 +225,45 @@ void send_sensor_update(){
 			ESP_LOGE( TAG, "Task ran out of time" );
 		}
 
+		if(websock_client.handle != NULL){
 		time(&now);
 		if(now > (time_last_log + 1)){				// Max 1 packet per second
 			time_last_log = now;
-			checksum = do_checksum((uint8_t *) &heater_status, sizeof(heater_status));		// Check if status has changed
+			checksum = do_checksum((int8_t *) &heater_status, sizeof(heater_status));		// Check if status has changed
+			//ESP_LOGI( TAG, "Checksum: %d, last checksum: %d stack %d", checksum, checksum_last, uxTaskGetStackHighWaterMark(NULL) );
+			
 			if(checksum_last != checksum){
-				root = cJSON_CreateObject();
-				cJSON_AddNumberToObject(root, "time", now);
-				cJSON_AddNumberToObject(root, "target", heater_status.target);
-				cJSON_AddNumberToObject(root, "env", heater_status.env);
-				cJSON_AddNumberToObject(root, "top", heater_status.top);
-				cJSON_AddNumberToObject(root, "bot", heater_status.bot);
-				cJSON_AddNumberToObject(root, "chip", heater_status.chip);
-				cJSON_AddNumberToObject(root, "rem", heater_status.rem);
-				cJSON_AddNumberToObject(root, "voltage", heater_status.voltage);
-				cJSON_AddNumberToObject(root, "current", heater_status.current);
-				cJSON_AddNumberToObject(root, "power", heater_status.power);
-				cJSON_AddNumberToObject(root, "energy", heater_status.energy);
-				cJSON_AddNumberToObject(root, "pf", heater_status.pf);
-				cJSON_AddNumberToObject(root, "web", heater_status.web);
-				cJSON_AddBoolToObject(root, "one_set", heater_status.one_set);
-				cJSON_AddBoolToObject(root, "one_pwr", heater_status.one_pwr);
-				cJSON_AddBoolToObject(root, "two_set", heater_status.two_set);
-				cJSON_AddBoolToObject(root, "two_pwr", heater_status.two_pwr);
-				cJSON_AddBoolToObject(root, "safe", heater_status.safe);
+				heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);
+
+
+				checksum_last = checksum;
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "time"), now);
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "target"), heater_status.target);
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "env"), heater_status.env);
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "top"), heater_status.top);
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "bot"), heater_status.bot);
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "chip"), heater_status.chip);
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "rem"), heater_status.rem);
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "voltage"), heater_status.voltage);
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "current"), heater_status.current);
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "power"), heater_status.power);
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "energy"), heater_status.energy);
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "pf"), heater_status.pf);
+				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "web"), heater_status.web);
+				cJSON_SetBoolValue(cJSON_GetObjectItem(root, "one_set"), heater_status.one_set);
+				cJSON_SetBoolValue(cJSON_GetObjectItem(root, "one_pwr"), heater_status.one_pwr);
+				cJSON_SetBoolValue(cJSON_GetObjectItem(root, "two_set"), heater_status.two_set);
+				cJSON_SetBoolValue(cJSON_GetObjectItem(root, "two_pwr"), heater_status.two_pwr);
+				cJSON_SetBoolValue(cJSON_GetObjectItem(root, "safe"), heater_status.safe);
 				json_string = cJSON_Print(root);
-				strcpy(sendBuf, json_string);
-				send_sensor_update_frame(sendBuf);
-				cJSON_Delete(root);
+				//ESP_LOGI( TAG, "cJSON string %s length: %d", json_string, strlen(json_string) );
+				//strcpy(sendBuf, json_string);
+				//ESP_LOGI( TAG, "sendBuf      %s", json_string );
+				send_sensor_update_frame(json_string);
+				ESP_LOGI( TAG, "Send." );
 			}
 		}
-
-
-
+		}
 
 		// Send only if we have both (1) an update, and (2) a client to send to.
 
@@ -655,7 +606,7 @@ httpd_handle_t start_webserver(void)
 			};
 		httpd_register_uri_handler(server, &file_download);
 
-		xTaskCreate( send_sensor_update, "sensor update", 4096, NULL, WS_UPDATE_TASK_PRIORITY, NULL );
+		xTaskCreate( send_sensor_update, "sensor update", 4096+1024, NULL, WS_UPDATE_TASK_PRIORITY, NULL );
 		return server;
 	}
 	ESP_LOGI(TAG, "Error starting server!");
