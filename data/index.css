@@ -1,37 +1,22 @@
 html {
-   font-family: Arial;
+   font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
    text-align: center;
   }
-  
   h1,
-  h3 {
+  h2 {
    color: #8C3636;
   }
-  
   h1 {
-   font-size: 26pt;
+   font-size: 24pt;
+   margin-bottom: 8px;
   }
-  
   h2 {
-   font-size: 20pt;
+   font-size: 18pt;
+   margin-top: 8px;
   }
-  
   button:hover {
    background-color: #e6e6e6;
   }
-  
-  button:nth-last-child(1):active {
-   box-shadow: inset -4px 5px 10px rgba(0, 0, 0, 0.5);
-  }
-  
-  button:nth-child(1):active {
-   box-shadow: inset 4px 5px 10px rgba(0, 0, 0, 0.5);
-  }
-  */
-  .he-mono {
-   font-family: "Lucida Console", "Lucida Sans Typewriter", Monaco, "Courier New", monospace;
-  }
-  
   .indicators {
    display: flex;
    flex-wrap: nowrap;
@@ -39,11 +24,11 @@ html {
   }
   .indicators > div {
    color: white;
-   width: 80px;
+   width: 72px;
    margin: 10px;
    text-align: center;
    line-height: 60px;
-   font-size: 30px;
+   font-size: 30pt;
    font-weight: bolder;
   }
   .indicator-off {
@@ -52,40 +37,31 @@ html {
   .indicator-on {
    background-color: #b30000;
   }
-    
   .buttons {
     display: flex;
     flex-wrap: nowrap;
     justify-content: center;
+    font-family:system-ui;
+    font-size: 24pt;
     padding-bottom: 20px;
+    height: 58px;
   }
-  
   .buttons > div {
     background-color: #f1f1f1;
     width: 80px;
     text-align: center;
-    line-height: 60px;
+  }
+  button {
+    min-width: 60px;
     font-size: 24pt;
   }
-  
-  button {
-  display: block;
-  width: 80px;
-  outline: none;
-  border: none;
-  cursor: pointer;
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 24pt;
-  }
-  
-  
   .datarow {
     display: flex;
     flex-wrap: nowrap;
     justify-content: center;
+    font-family:Verdana, Geneva, Tahoma, sans-serif;
   }
-  
-  .datarow > div {
+    .datarow > div {
     width: 80px;
     text-align: center;
     line-height: 40px;
@@ -96,84 +72,29 @@ html {
     flex-wrap: nowrap;
     justify-content: center;
   }
-  
-  .icons > div {
+   .icons > div {
     text-align: center;
   }
-  
-  .he-button-off,
-  .he-button-on {
-   font-size: 30px;
-   font-weight: bold;
-   color: white;
-   padding: 16px 40px;
-   margin: 2px;
-   margin-bottom: 20px;
-   width: 100px;
+  .timerow {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
+    font-family:Verdana, Geneva, Tahoma, sans-serif;
   }
-  
-  .te-input-group {
-   display: inline-block;
-   background-color: canvas;
-   box-shadow: 2px 3px 4px rgba(0, 0, 0, 0.3);
-   border-radius: 15px;
-   margin-bottom: 24px;
+  .timerow > div {
+    text-align: center;
+    line-height: 40px;
+    font-size: 12pt;
   }
-  
-  .te-input-string {
-   width: 90px;
-   padding-top: 16px;
-   padding-bottom: 16px;
-   padding-left: 0;
-   padding-right: 0;
-   border: none;
-   font-size: 18px;
-   text-align: center;
-  }
-  
-  .te-input-button {
-   font-size: 18px;
-   background-color: canvas;
-   padding: 16px;
-  }
-  
-  .te-label {
-   width: 60px;
-   margin: 16px;
-  }
-  
-  .data {
-   display: inline-block;
-   font-family: "Lucida Console", "Lucida Sans Typewriter", Monaco, "Courier New", monospace;
-   width: 16px;
-   margin: 4px;
-   text-align: left;
-  }
-  
-  .data-volt,
-  .data-amp,
-  .data-watt {
-   width: 64px;
-   text-align: right;
-  }
-  
-  .data-amp {
-   width: 36px;
-   text-align: right;
-  }
-  
   .icon-wifi {
    mask: url("wifi.svg");
   }
-  
   .icon-bluetooth {
    mask: url("bluetooth.svg");
   }
-  
   .icon-matter {
    mask: url("matter.svg");
   }
-  
   .icon {
    display: inline-block;
    width: 32px;
@@ -185,7 +106,6 @@ html {
    mask-position: center;
    margin: 32px;
   }
-  
   .icon:hover,
   .icon:focus {
    background: red;

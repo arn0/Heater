@@ -13,99 +13,86 @@ const te_chp = document.getElementById("te_chp");
 
 const volt = document.getElementById("volt");
 const amp = document.getElementById("amp");
+const watt = document.getElementById("watt");
+const kwh = document.getElementById("kwh");
+const pf = document.getElementById("pf");
 
 const wifi = document.getElementById("wifi");
 const blue = document.getElementById("blue");
 const matt = document.getElementById("matt");
 
+const time = document.getElementById("time");
 
 var gateway = `ws://${window.location.hostname}/ws`;
+//var gateway = `ws://heater.local/ws`;
 var websocket;
-var temp;
 var update;
 
 function initWebSocket() {
- console.log('Trying to open a WebSocket connection...');
- websocket = new WebSocket(gateway);
- websocket.onopen    = onOpen;
- websocket.onclose   = onClose;
- websocket.onmessage = onMessage; // <-- add this line
+  console.log('Trying to open a WebSocket connection...');
+  websocket = new WebSocket(gateway);
+  websocket.onopen    = onOpen;
+  websocket.onclose   = onClose;
+  websocket.onmessage = onMessage;
 }
 
 function onOpen(event) {
- console.log('Connection opened');
- wifi.style.background = '#00c4fa';
+  console.log('Connection opened');
+  wifi.style.background = '#00c4fa';
 }
 
-
- function onClose(event) {
- console.log('Connection closed');
- wifi.style.background = '#BEBEBE';
- setTimeout(initWebSocket, 2000);
+function onClose(event) {
+  console.log('Connection closed');
+  wifi.style.background = '#BEBEBE';
+  setTimeout(initWebSocket, 2000);
 }
 
 function onMessage(event) {
-  if(Object.keys(event.data).length > 50)
-  {
   update = JSON.parse(event.data);
-  //temp=event.data;
-  console.log(event.data);
+  //console.log(event.data);
+  te_rem.textContent = update.rem.toFixed(1);
+  te_frt.textContent = update.env.toFixed(1);
+  te_top.textContent = update.top.toFixed(1);
+  te_bot.textContent = update.bot.toFixed(1);
+  te_chp.textContent = update.chip.toFixed(1);
+  target.textContent = update.target.toFixed(1);
   volt.textContent = update.voltage.toFixed(1);
-  amp.textContent = update.current;
-  }
-
-  switch(event.data.at(0)){
-  case "r":
-   te_rem.innerHTML = event.data.substring(1);
-   break;
-  case "e":
-   te_frt.innerHTML = event.data.substring(1);
-   break;
-  case "t":
-   te_top.innerHTML = event.data.substring(1);
-   break;
-  case "b":
-   te_bot.innerHTML = event.data.substring(1);
-   break;
-  case "c":
-   te_chp.innerHTML = event.data.substring(1);
-   break;
-  case "a":
-   target.textContent = event.data.substring(1);
-   break;
-  case "i":
-   if(event.data.at(1) == '1') {
+  amp.textContent = update.current.toFixed(1);
+  watt.textContent = update.power.toFixed(1);
+  kwh.textContent = update.energy.toFixed(1);
+  pf.textContent = update.pf.toFixed(3);
+  if(update.one_pwr){
     indicator1.className = 'indicator-on';
-   }else{
+  }else{
     indicator1.className = 'indicator-off';
-   }
-   break;
-  case "h":
-   if(event.data.at(1) == '1') {
+  }
+  if(update.two_pwr){
     indicator2.className = 'indicator-on';
-   }else{
+  }else{
     indicator2.className = 'indicator-off';
-   }
-   break;
- }
+  }
+  const d = new Date();
+  let text = d.toLocaleString();
+  time.textContent = text;
+  
 }
 
 window.addEventListener('load', onLoad);
 
 function onLoad(event) {
- initWebSocket();
- initButtons();
+  initWebSocket();
+  initButtons();
 }
      
 function initButtons() {
- document.getElementById('decrement').addEventListener('click', decrement);
- document.getElementById('increment').addEventListener('click', increment);
+  document.getElementById('decrement').addEventListener('click', decrement);
+  document.getElementById('increment').addEventListener('click', increment);
 }
 
 function decrement(){
- websocket.send('D');
+  websocket.send('D');
 }
 
 function increment(){
- websocket.send('U');
+  websocket.send('U');
 }
