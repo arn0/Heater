@@ -55,8 +55,8 @@ char response_data[4096];
 #define readBufSize 1024*16
 static char readBuf[readBufSize];
 
-#define sendBufSize 256*4
-static char sendBuf[sendBufSize];
+#define sendBufSize 256
+//static char sendBuf[sendBufSize];
 
 
 /*
@@ -84,7 +84,7 @@ static size_t read_spiff_buffer(const char *file_name)
 		// Technically unnecessary but an extra null termination never hurt anyone
 		readBuf[readSize]=0;
 	}
-return readSize;
+	return readSize;
 }
 
 /*
@@ -117,20 +117,20 @@ static void ws_async_send(void *arg)
 	free(resp_arg);
 }
 
-static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req)
-{
-    struct async_resp_arg *resp_arg = malloc(sizeof(struct async_resp_arg));
-    if (resp_arg == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-    resp_arg->hd = req->handle;
-    resp_arg->fd = httpd_req_to_sockfd(req);
-    esp_err_t ret = httpd_queue_work(handle, ws_async_send, resp_arg);
-    if (ret != ESP_OK) {
-        free(resp_arg);
-    }
-    return ret;
-}
+//static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req)
+//{
+   //struct async_resp_arg *resp_arg = malloc(sizeof(struct async_resp_arg));
+   //if (resp_arg == NULL) {
+      //return ESP_ERR_NO_MEM;
+   //}
+   //resp_arg->hd = req->handle;
+   //resp_arg->fd = httpd_req_to_sockfd(req);
+   //esp_err_t ret = httpd_queue_work(handle, ws_async_send, resp_arg);
+   //if (ret != ESP_OK) {
+      //free(resp_arg);
+   //}
+   //return ret;
+//}
 
 /*
  * Struct with information to uniquely identify a websocket
@@ -141,21 +141,23 @@ struct websock_instance {
   int descriptor;
 };
 
-// Websocket instance for browser client
-static struct websock_instance websock_client;
+#define MAX_WEBSOCK_CLIENTS 4
+
+// Websocket instance for multiple browser clients
+static struct websock_instance websock_clients[MAX_WEBSOCK_CLIENTS];
 
 /*
  * @brief WebSocket has been closed, clean up associated data structures
  * @param context Unused here, but had to be nonzero for this callback to be called upon socket close
  */
 
-void socket_close_cleanup(void* context){
-  ESP_LOGI(TAG, "Lost our client handler.");
-  websock_client.handle = NULL;
-  websock_client.descriptor = 0;
+void socket_close_cleanup(struct websock_instance* context){
+	ESP_LOGI(TAG, "Lost our client handler.");
+	context->handle = NULL;
+	context->descriptor = 0;
 }
 
-esp_err_t send_sensor_update_frame(char *buffer){
+esp_err_t send_sensor_update_frame(char *buffer, size_t client){
 	httpd_ws_frame_t ws_frame = {
 		.final = true,
 		.fragmented = false,
@@ -164,7 +166,7 @@ esp_err_t send_sensor_update_frame(char *buffer){
 		.len = strlen(buffer)
 	};
 
-	ESP_ERROR_CHECK(httpd_ws_send_frame_async( websock_client.handle, websock_client.descriptor, &ws_frame ));
+	ESP_ERROR_CHECK(httpd_ws_send_frame_async( websock_clients[client].handle, websock_clients[client].descriptor, &ws_frame ));
   return ESP_OK;
 }
 
@@ -178,7 +180,7 @@ int16_t do_checksum(int8_t *buffer, size_t size){
 	return(sum);
 }
 
-time_t time_last_log = 0;
+time_t next_log_time = 0;
 int16_t checksum_last = 0;
 
 /*
@@ -224,82 +226,52 @@ void send_sensor_update(){
 		if( xWasDelayed == pdFALSE ){
 			ESP_LOGE( TAG, "Task ran out of time" );
 		}
+		if(websock_clients[0].handle != NULL
+		|| websock_clients[1].handle != NULL
+		|| websock_clients[2].handle != NULL
+		|| websock_clients[3].handle != NULL){
 
-		if(websock_client.handle != NULL){
-		time(&now);
-		if(now > (time_last_log + 1)){				// Max 1 packet per second
-			time_last_log = now;
-			checksum = do_checksum((int8_t *) &heater_status, sizeof(heater_status));		// Check if status has changed
-			//ESP_LOGI( TAG, "Checksum: %d, last checksum: %d stack %d", checksum, checksum_last, uxTaskGetStackHighWaterMark(NULL) );
-			
-			if(checksum_last != checksum){
-				heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);
+			time(&now);
+			if(now > next_log_time){				// Max 1 packet per second
+				next_log_time = now + 1;
+				checksum = do_checksum((int8_t *) &heater_status, sizeof(heater_status));		// Check if status has changed
+				//ESP_LOGI( TAG, "Checksum: %d, last checksum: %d stack %d", checksum, checksum_last, uxTaskGetStackHighWaterMark(NULL) );
+				
+				if(checksum_last != checksum){
+					checksum_last = checksum;
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "time"), now);
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "target"), heater_status.target);
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "env"), heater_status.env);
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "top"), heater_status.top);
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "bot"), heater_status.bot);
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "chip"), heater_status.chip);
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "rem"), heater_status.rem);
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "voltage"), heater_status.voltage);
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "current"), heater_status.current);
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "power"), heater_status.power);
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "energy"), heater_status.energy);
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "pf"), heater_status.pf);
+					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "web"), heater_status.web);
+					cJSON_SetBoolValue(cJSON_GetObjectItem(root, "one_set"), heater_status.one_set);
+					cJSON_SetBoolValue(cJSON_GetObjectItem(root, "one_pwr"), heater_status.one_pwr);
+					cJSON_SetBoolValue(cJSON_GetObjectItem(root, "two_set"), heater_status.two_set);
+					cJSON_SetBoolValue(cJSON_GetObjectItem(root, "two_pwr"), heater_status.two_pwr);
+					cJSON_SetBoolValue(cJSON_GetObjectItem(root, "safe"), heater_status.safe);
+					json_string = cJSON_Print(root);
+					//ESP_LOGI( TAG, "cJSON string %s length: %d", json_string, strlen(json_string) );
 
+					for (size_t i = 0; i < MAX_WEBSOCK_CLIENTS; i++)
+					{
+						if (websock_clients[i].handle != NULL)
+						{
+							//strcpy(sendBuf, json_string);
+							//ESP_LOGI( TAG, "sendBuf      %s", json_string );
+							send_sensor_update_frame(json_string, i);
+							//ESP_LOGI( TAG, "Send." );
 
-				checksum_last = checksum;
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "time"), now);
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "target"), heater_status.target);
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "env"), heater_status.env);
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "top"), heater_status.top);
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "bot"), heater_status.bot);
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "chip"), heater_status.chip);
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "rem"), heater_status.rem);
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "voltage"), heater_status.voltage);
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "current"), heater_status.current);
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "power"), heater_status.power);
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "energy"), heater_status.energy);
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "pf"), heater_status.pf);
-				cJSON_SetNumberValue(cJSON_GetObjectItem(root, "web"), heater_status.web);
-				cJSON_SetBoolValue(cJSON_GetObjectItem(root, "one_set"), heater_status.one_set);
-				cJSON_SetBoolValue(cJSON_GetObjectItem(root, "one_pwr"), heater_status.one_pwr);
-				cJSON_SetBoolValue(cJSON_GetObjectItem(root, "two_set"), heater_status.two_set);
-				cJSON_SetBoolValue(cJSON_GetObjectItem(root, "two_pwr"), heater_status.two_pwr);
-				cJSON_SetBoolValue(cJSON_GetObjectItem(root, "safe"), heater_status.safe);
-				json_string = cJSON_Print(root);
-				//ESP_LOGI( TAG, "cJSON string %s length: %d", json_string, strlen(json_string) );
-				//strcpy(sendBuf, json_string);
-				//ESP_LOGI( TAG, "sendBuf      %s", json_string );
-				send_sensor_update_frame(json_string);
-				ESP_LOGI( TAG, "Send." );
-			}
-		}
-		}
-
-		// Send only if we have both (1) an update, and (2) a client to send to.
-
-		if( heater_status.web && websock_client.handle != NULL ){
-			if( heater_status.web & REM_W_FL ){
-				heater_status.web &= ~REM_W_FL;
-				sprintf( sendBuf, "r%2.01f", heater_status.rem );
-				send_sensor_update_frame(sendBuf);
-			}else if( heater_status.web & ENV_W_FL ){
-				heater_status.web &= ~ENV_W_FL;
-				sprintf( sendBuf, "e%2.01f", heater_status.env );
-				send_sensor_update_frame(sendBuf);
-			}else if( heater_status.web & TOP_W_FL ){
-				heater_status.web &= ~TOP_W_FL;
-				sprintf( sendBuf, "t%2.01f", heater_status.top );
-				send_sensor_update_frame(sendBuf);
-			}else if( heater_status.web & BOT_W_FL ){
-				heater_status.web &= ~BOT_W_FL;
-				sprintf( sendBuf, "b%2.01f", heater_status.bot );
-				send_sensor_update_frame(sendBuf);
-			}else if( heater_status.web & CHP_W_FL ){
-				heater_status.web &= ~CHP_W_FL;
-				sprintf( sendBuf, "c%2.01f", heater_status.chip );
-				send_sensor_update_frame(sendBuf);
-			}else if( heater_status.web & TAR_W_FL ){
-				heater_status.web &= ~TAR_W_FL;
-				sprintf( sendBuf, "a%2.01f", heater_status.target );
-				send_sensor_update_frame(sendBuf);
-			}else if( heater_status.web & ONE_W_FL ){
-				heater_status.web &= ~ONE_W_FL;
-				sprintf( sendBuf, "i%d", heater_status.one_pwr );
-				send_sensor_update_frame(sendBuf);
-			}else if( heater_status.web & TWO_W_FL ){
-				heater_status.web &= ~TWO_W_FL;
-				sprintf( sendBuf, "h%d", heater_status.two_pwr );
-				send_sensor_update_frame(sendBuf);
+						}
+					}
+				}
 			}
 		}
   }while (true);
@@ -311,22 +283,31 @@ void send_sensor_update(){
 
 static esp_err_t get_ws_handler( httpd_req_t *req )
 {
+	size_t i;
+
 	if ( req->method == HTTP_GET ) {
 		ESP_LOGI( TAG, "Handshake done, the new connection was opened" );
 
-		if ( websock_client.handle == NULL ) {
-			// We didn't have a client before, now we do. Set up notification so
-			// we know when it goes away.
-			ESP_LOGI( TAG, "Have a new client" );
-			websock_client.handle = req->handle;
-			websock_client.descriptor = httpd_req_to_sockfd( req );
-			req->sess_ctx = (void*)1; // Set to nonzero otherwise free_ctx won't get called.
-			req->free_ctx = socket_close_cleanup;
-		} else if ( websock_client.handle != req->handle || websock_client.descriptor != httpd_req_to_sockfd( req ) ) {
-			ESP_LOGI( TAG, "Already have ja client, reject connection attempt." );
-			return ESP_FAIL;
+		for (i = 0; i < MAX_WEBSOCK_CLIENTS; i++)
+		{
+			if( websock_clients[i].handle == req->handle && websock_clients[i].descriptor == httpd_req_to_sockfd( req ) ){		// client already connected
+				return ESP_OK;
+			}
 		}
-		return ESP_OK;
+		for (i = 0; i < MAX_WEBSOCK_CLIENTS; i++)
+		{
+			if( websock_clients[i].handle == NULL ){
+				ESP_LOGI( TAG, "Have a new client, %d now", i + 1 );
+				websock_clients[i].handle = req->handle;
+				websock_clients[i].descriptor = httpd_req_to_sockfd( req );
+				req->sess_ctx = (void*) &websock_clients[i];
+				req->free_ctx = (void *) socket_close_cleanup;
+				next_log_time = 0;		// send update immediately
+				return ESP_OK;
+			}
+		}
+		ESP_LOGI( TAG, "Already have 4 clients, reject connection attempt." );
+		return ESP_FAIL;
 	}
 
 	httpd_ws_frame_t ws_pkt;
@@ -356,43 +337,22 @@ static esp_err_t get_ws_handler( httpd_req_t *req )
 			return ret;
 		}
 		//ESP_LOGI(TAG, "Got packet with message: %s", ws_pkt.payload);
+		switch(ws_pkt.payload[0]){
+			case 'D':
+				heater_status.target -= HEATER_WEB_STEP;
+				heater_status.web |= TAR_W_FL;
+				next_log_time = 0;		// send update immediately
+				break;
 
-			switch(ws_pkt.payload[0]){
-				case 'D':
-					heater_status.target -= HEATER_WEB_STEP;
-					heater_status.web |= TAR_W_FL;
-					break;
-
-				case 'U':
-					heater_status.target += HEATER_WEB_STEP;
-					heater_status.web |= TAR_W_FL;
-					break;
-
-				case 'I':
-					heater_status.one_set = !heater_status.one_set;
-					heater_status.web |= ONE_W_FL;
-					break;
-
-				case 'H':
-					heater_status.two_set = !heater_status.two_set;
-					heater_status.web |= TWO_W_FL;
-					break;
-			}
-
-    }
-    //ESP_LOGI(TAG, "Packet type: %d", ws_pkt.type);
-    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT &&
-        strcmp((char*)ws_pkt.payload,"Trigger async") == 0) {
-        free(buf);
-        return trigger_async_send(req->handle, req);
-    }
-
-    ret = httpd_ws_send_frame(req, &ws_pkt);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "httpd_ws_send_frame failed with %d", ret);
-    }
-    free(buf);
-    return ret;
+			case 'U':
+				heater_status.target += HEATER_WEB_STEP;
+				heater_status.web |= TAR_W_FL;
+				next_log_time = 0;		// send update immediately
+				break;
+		}
+   }
+   free(buf);
+   return ret;
 }
 
 
@@ -546,29 +506,28 @@ httpd_handle_t start_webserver(void)
 	httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 	httpd_handle_t server = NULL;
 
-    /* Use the URI wildcard matching function in order to
-     * allow the same handler to respond to multiple different
-     * target URIs which match the wildcard scheme */
-    config.uri_match_fn = httpd_uri_match_wildcard;
+   /* Use the URI wildcard matching function in order to
+    * allow the same handler to respond to multiple different
+    * target URIs which match the wildcard scheme */
+   config.uri_match_fn = httpd_uri_match_wildcard;
 
-	// Initialize structure tracking websocket to client
-	websock_client.handle = NULL;
-	websock_client.descriptor = 0;
+	// Initialize structure tracking websockets to clients
+	memset( &websock_clients, 0, sizeof(websock_clients) );
 
-    static struct file_server_data *server_data = NULL;
+   static struct file_server_data *server_data = NULL;
 
-    if (server_data) {
-        ESP_LOGE(TAG, "File server already started");		// ESP_ERR_INVALID_STATE
-        return NULL;
-    }
+   if (server_data) {
+      ESP_LOGE(TAG, "File server already started");		// ESP_ERR_INVALID_STATE
+      return NULL;
+   }
 
-    /* Allocate memory for server data */
-    server_data = calloc(1, sizeof(struct file_server_data));
-    if (!server_data) {
-        ESP_LOGE(TAG, "Failed to allocate memory for server data");		// ESP_ERR_NO_MEM
-        return NULL;
-    }
-    strlcpy(server_data->base_path, base_path,
+   /* Allocate memory for server data */
+   server_data = calloc(1, sizeof(struct file_server_data));
+   if (!server_data) {
+      ESP_LOGE(TAG, "Failed to allocate memory for server data");		// ESP_ERR_NO_MEM
+      return NULL;
+   }
+   strlcpy(server_data->base_path, base_path,
             sizeof(server_data->base_path));
 	
 	ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
