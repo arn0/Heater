@@ -35,7 +35,6 @@ extern void real_time_stats(void);
 
 static const char *TAG = "main";
 
-
 void app_main(void)
 {
 	timezone_set();
@@ -65,7 +64,7 @@ void app_main(void)
 
 	do {
 		EventBits_t bits;
-	 
+
 		/* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
 		 * number of re-tries (WIFI_DISCONNECTED_BIT). The bits are set by event_handler() */
 
@@ -94,5 +93,5 @@ void app_main(void)
 		} else {
 			ESP_LOGE(TAG, "UNEXPECTED EVENT");
 		}
-	 } while (true);
+			} while (true);
 }
