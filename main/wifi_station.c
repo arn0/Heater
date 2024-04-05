@@ -40,26 +40,26 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 {
 	if (event_base == WIFI_EVENT) {
 		switch (event_id) {
-		case WIFI_EVENT_WIFI_READY: /**< WiFi ready */
-			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_WIFI_READY");
+		case WIFI_EVENT_WIFI_READY:
+			ESP_LOGI(TAG, "wifi event handler: WiFi ready");
 			break;
-		case WIFI_EVENT_SCAN_DONE: /**< Finished scanning AP */
-			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_SCAN_DONE");
+		case WIFI_EVENT_SCAN_DONE:
+			ESP_LOGI(TAG, "wifi event handler: Finished scanning AP");
 			break;
-		case WIFI_EVENT_STA_START: /**< Station start */
-			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_START");
+		case WIFI_EVENT_STA_START:
+			ESP_LOGI(TAG, "wifi event handler: Station start");
 			esp_wifi_connect();
 			ESP_LOGI(TAG, "wifi event handler: esp_wifi_connect() done");
 			break;
-		case WIFI_EVENT_STA_STOP: /**< Station stop */
-			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_STOP");
+		case WIFI_EVENT_STA_STOP:
+			ESP_LOGI(TAG, "wifi event handler: Station stop");
 			break;
-		case WIFI_EVENT_STA_CONNECTED: /**< Station connected to AP */
-			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_CONNECTED");
+		case WIFI_EVENT_STA_CONNECTED:
+			ESP_LOGI(TAG, "wifi event handler: Station connected to AP");
 			s_retry_num = 0;
 			break;
-		case WIFI_EVENT_STA_DISCONNECTED: /**< Station disconnected from AP */
-			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_DISCONNECTED");
+		case WIFI_EVENT_STA_DISCONNECTED:
+			ESP_LOGI(TAG, "wifi event handler: Station disconnected from AP");
 			wifi_connected = false;
 			sntp_client_stop();
 			lvgl_ui_update();
@@ -79,14 +79,14 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 			}
 			ESP_LOGI(TAG, "wifi event handler: connect to the AP failed");
 			break;
-		case WIFI_EVENT_STA_AUTHMODE_CHANGE: /**< the auth mode of AP connected by device's station changed */
-			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_AUTHMODE_CHANGE");
+		case WIFI_EVENT_STA_AUTHMODE_CHANGE:
+			ESP_LOGI(TAG, "wifi event handler: The auth mode of AP connected by device's station changed");
 			break;
-		case WIFI_EVENT_STA_WPS_ER_SUCCESS: /**< Station wps succeeds in enrollee mode */
-			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_WPS_ER_SUCCESS");
+		case WIFI_EVENT_STA_WPS_ER_SUCCESS:
+			ESP_LOGI(TAG, "wifi event handler: Station wps succeeds in enrollee mode");
 			break;
-		case WIFI_EVENT_STA_WPS_ER_FAILED: /**< Station wps fails in enrollee mode */
-			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_WPS_ER_FAILED");
+		case WIFI_EVENT_STA_WPS_ER_FAILED:
+			ESP_LOGI(TAG, "wifi event handler: Station wps fails in enrollee mode");
 			break;
 		case WIFI_EVENT_STA_WPS_ER_TIMEOUT: /**< Station wps timeout in enrollee mode */
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_WPS_ER_TIMEOUT");
@@ -140,8 +140,35 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 		case WIFI_EVENT_ITWT_SUSPEND: /**< iTWT suspend */
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ITWT_SUSPEND");
 			break;
+		case WIFI_EVENT_NAN_STARTED: /**< NAN Discovery has started */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_STARTED");
+			break;
+		case WIFI_EVENT_NAN_STOPPED: /**< NAN Discovery has stopped */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_STOPPED");
+			break;
+		case WIFI_EVENT_NAN_SVC_MATCH: /**< NAN Service Discovery match found */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_SVC_MATCH");
+			break;
+		case WIFI_EVENT_NAN_REPLIED: /**< Replied to a NAN peer with Service Discovery match */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_REPLIED");
+			break;
+		case WIFI_EVENT_NAN_RECEIVE: /**< Received a Follow-up message */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_RECEIVE");
+			break;
+		case WIFI_EVENT_NDP_INDICATION: /**< Received NDP Request from a NAN Peer */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NDP_INDICATION");
+			break;
+		case WIFI_EVENT_NDP_CONFIRM: /**< NDP Confirm Indication */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NDP_CONFIRM");
+			break;
+		case WIFI_EVENT_NDP_TERMINATED: /**< NAN Datapath terminated indication */
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NDP_TERMINATED");
+			break;
+		case WIFI_EVENT_HOME_CHANNEL_CHANGE:
+			ESP_LOGI(TAG, "wifi event handler: WiFi home channel change，doesn't occur when scanning");
+			break;
 		default:
-			ESP_LOGI(TAG, "wifi event handler: event_id = %lx", event_id);
+			ESP_LOGE(TAG, "wifi event handler: event_id = %ld", event_id);
 			break;
 		}
 	} else {
@@ -186,7 +213,7 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
 			ESP_LOGI(TAG, "ip event handler: IP_EVENT_PPP_LOST_IP");
 			break;
 		default:
-			ESP_LOGI(TAG, "ip event handler: event_id %ld", event_id);
+			ESP_LOGE(TAG, "ip event handler: event_id %ld", event_id);
 			break;
 		}
 	} else {
@@ -216,11 +243,13 @@ void wifi_init_station(void)
 					.threshold.authmode = WIFI_AUTH_WPA2_PSK,
 					.sae_pwe_h2e = WPA3_SAE_PWE_HUNT_AND_PECK,
 					.sae_h2e_identifier = "",
+					.failure_retry_cnt = 3,
 			},
 	};
 	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 	ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+	vTaskDelay(pdMS_TO_TICKS(200));
 	ESP_ERROR_CHECK(esp_wifi_start());
 
-	ESP_LOGD(TAG, "wifi_init_station() finished.");
+	ESP_LOGI(TAG, "wifi_init_station() finished.");
 }
