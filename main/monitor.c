@@ -44,7 +44,7 @@ pzem_setup_t pzConf =
 };
 _current_values_t pzValues;            		  /* Measured values */
 
-time_t log_saved_time, log_update_time, now;
+time_t log_saved_time, log_update_time, now, next_heap_time;
 
 void monitor_task(){
 	TickType_t xPreviousWakeTime;
@@ -126,6 +126,10 @@ void monitor_task(){
 					//log_save();
 					log_saved_time = now;
 				}
+				if(now > next_heap_time){
+					next_heap_time = now + 60*2;
+					heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);		// Log heap memory every 2 minutes
+				}
 				break;
 
 			default:
@@ -196,6 +200,7 @@ bool start_monitor_task(){
 
 	time(&log_saved_time);
 	log_update_time = log_saved_time;
+	next_heap_time = log_saved_time;
 	//log_read();
 
 	xTaskCreate( monitor_task, "monitor", 4096, NULL, MONITOR_TASK_PRIORITY, NULL );
