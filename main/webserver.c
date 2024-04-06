@@ -12,11 +12,11 @@
 #include "nvs_flash.h"
 #include "esp_vfs.h"
 #include "esp_spiffs.h"
-#include "cJSON.h"
 
 #include "mount.h"
 #include "task_priorities"
 #include "heater.h"
+#include "json.h"
 
 #define HEATER_WEB_STEP 0.5
 
@@ -46,8 +46,8 @@ struct file_server_data {
 const char *base_path = "/data";
 
 #define INDEX_HTML_PATH "/data/index.html"
-char index_html[4096];
-char response_data[4096];
+//char index_html[4096];
+//char response_data[4096];
 
 // We can spend effort making code memory-efficient, or we can just blow
 // a chunk of RAM to make code trivial.
@@ -55,7 +55,7 @@ char response_data[4096];
 #define readBufSize 1024*16
 static char readBuf[readBufSize];
 
-#define sendBufSize 256
+//#define sendBufSize 256
 //static char sendBuf[sendBufSize];
 
 
@@ -86,51 +86,6 @@ static size_t read_spiff_buffer(const char *file_name)
 	}
 	return readSize;
 }
-
-/*
- * Structure holding server handle and internal socket fd
- * in order to use out of request send
- */
-
-struct async_resp_arg {
-	httpd_handle_t hd;
-	int fd;
-};
-
-/*
- * async send function, which we put into the httpd work queue
- */
-
-static void ws_async_send(void *arg)
-{
-	static const char * data = "Async data";
-	struct async_resp_arg *resp_arg = arg;
-	httpd_handle_t hd = resp_arg->hd;
-	int fd = resp_arg->fd;
-	httpd_ws_frame_t ws_pkt;
-	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-	ws_pkt.payload = (uint8_t*)data;
-	ws_pkt.len = strlen(data);
-	ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-	httpd_ws_send_frame_async(hd, fd, &ws_pkt);
-	free(resp_arg);
-}
-
-//static esp_err_t trigger_async_send(httpd_handle_t handle, httpd_req_t *req)
-//{
-   //struct async_resp_arg *resp_arg = malloc(sizeof(struct async_resp_arg));
-   //if (resp_arg == NULL) {
-      //return ESP_ERR_NO_MEM;
-   //}
-   //resp_arg->hd = req->handle;
-   //resp_arg->fd = httpd_req_to_sockfd(req);
-   //esp_err_t ret = httpd_queue_work(handle, ws_async_send, resp_arg);
-   //if (ret != ESP_OK) {
-      //free(resp_arg);
-   //}
-   //return ret;
-//}
 
 /*
  * Struct with information to uniquely identify a websocket
@@ -180,8 +135,9 @@ int16_t do_checksum(int8_t *buffer, size_t size){
 	return(sum);
 }
 
-time_t next_log_time = 0;
-int16_t checksum_last = 0;
+static time_t next_log_time = 0;
+static int16_t checksum_last = 0;
+static char* json_string;
 
 /*
  * Send updates to client
@@ -193,28 +149,6 @@ void send_sensor_update(){
 	BaseType_t xWasDelayed;
 	time_t now;
 	int16_t checksum;
-	cJSON *root;
-	char *json_string;
-
-	root = cJSON_CreateObject();
-	cJSON_AddNumberToObject(root, "time", now);
-	cJSON_AddNumberToObject(root, "target", heater_status.target);
-	cJSON_AddNumberToObject(root, "env", heater_status.env);
-	cJSON_AddNumberToObject(root, "top", heater_status.top);
-	cJSON_AddNumberToObject(root, "bot", heater_status.bot);
-	cJSON_AddNumberToObject(root, "chip", heater_status.chip);
-	cJSON_AddNumberToObject(root, "rem", heater_status.rem);
-	cJSON_AddNumberToObject(root, "voltage", heater_status.voltage);
-	cJSON_AddNumberToObject(root, "current", heater_status.current);
-	cJSON_AddNumberToObject(root, "power", heater_status.power);
-	cJSON_AddNumberToObject(root, "energy", heater_status.energy);
-	cJSON_AddNumberToObject(root, "pf", heater_status.pf);
-	cJSON_AddNumberToObject(root, "web", heater_status.web);
-	cJSON_AddBoolToObject(root, "one_set", heater_status.one_set);
-	cJSON_AddBoolToObject(root, "one_pwr", heater_status.one_pwr);
-	cJSON_AddBoolToObject(root, "two_set", heater_status.two_set);
-	cJSON_AddBoolToObject(root, "two_pwr", heater_status.two_pwr);
-	cJSON_AddBoolToObject(root, "safe", heater_status.safe);
 
 	// Initialise the xLastWakeTime variable with the current time.
 	xPreviousWakeTime = xTaskGetTickCount ();
@@ -235,40 +169,17 @@ void send_sensor_update(){
 			if(now > next_log_time){				// Max 1 packet per second
 				next_log_time = now + 1;
 				checksum = do_checksum((int8_t *) &heater_status, sizeof(heater_status));		// Check if status has changed
-				//ESP_LOGI( TAG, "Checksum: %d, last checksum: %d stack %d", checksum, checksum_last, uxTaskGetStackHighWaterMark(NULL) );
 				
 				if(checksum_last != checksum){
 					checksum_last = checksum;
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "time"), now);
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "target"), heater_status.target);
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "env"), heater_status.env);
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "top"), heater_status.top);
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "bot"), heater_status.bot);
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "chip"), heater_status.chip);
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "rem"), heater_status.rem);
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "voltage"), heater_status.voltage);
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "current"), heater_status.current);
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "power"), heater_status.power);
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "energy"), heater_status.energy);
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "pf"), heater_status.pf);
-					cJSON_SetNumberValue(cJSON_GetObjectItem(root, "web"), heater_status.web);
-					cJSON_SetBoolValue(cJSON_GetObjectItem(root, "one_set"), heater_status.one_set);
-					cJSON_SetBoolValue(cJSON_GetObjectItem(root, "one_pwr"), heater_status.one_pwr);
-					cJSON_SetBoolValue(cJSON_GetObjectItem(root, "two_set"), heater_status.two_set);
-					cJSON_SetBoolValue(cJSON_GetObjectItem(root, "two_pwr"), heater_status.two_pwr);
-					cJSON_SetBoolValue(cJSON_GetObjectItem(root, "safe"), heater_status.safe);
-					json_string = cJSON_Print(root);
-					//ESP_LOGI( TAG, "cJSON string %s length: %d", json_string, strlen(json_string) );
 
 					for (size_t i = 0; i < MAX_WEBSOCK_CLIENTS; i++)
 					{
 						if (websock_clients[i].handle != NULL)
 						{
-							//strcpy(sendBuf, json_string);
-							//ESP_LOGI( TAG, "sendBuf      %s", json_string );
+							json_string = json_update();
+							ESP_LOGI( TAG, "json_str: %s", json_string );
 							send_sensor_update_frame(json_string, i);
-							//ESP_LOGI( TAG, "Send." );
-
 						}
 					}
 				}
