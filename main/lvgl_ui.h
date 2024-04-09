@@ -6,7 +6,10 @@ extern "C" {
 #endif
 
 extern bool wifi_connected;
+extern bool stats_read_postponed;
 void lvgl_ui_update(void);
+esp_err_t stats_save();
+esp_err_t stats_read();
 
 #ifdef __cplusplus
 }

@@ -6,10 +6,13 @@
 
 // This demo UI is adapted from LVGL official example: https://docs.lvgl.io/master/widgets/extra/meter.html#simple-meter
 
+#include "time.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
 #include "esp_log.h"
+#include "esp_vfs.h"
+#include "esp_spiffs.h"
 #include "lvgl.h"
 
 #include "task_priorities"
@@ -17,6 +20,10 @@
 #include "clock.h"
 #include "logger.h"
 #include "lvgl_ui.h"
+
+#define DAY_TO_S(TimeInDays) ( ( time_t ) ( ( ( time_t ) ( TimeInDays ) * ( time_t ) 24*60*60 ) ) )
+
+static const char *TAG = "lvgl_ui";
 
 bool wifi_connected = false;
 bool lvg_ui_started = false;
@@ -170,7 +177,7 @@ void example_lvgl_demo_ui(lv_disp_t *disp)
 	analytics_create(lv_scr);
 	lvg_ui_started = true;
 
-   vTaskDelay(pdMS_TO_TICKS(5000));
+	vTaskDelay(pdMS_TO_TICKS(5000));
 	stats_start();
 	lv_obj_invalidate(lv_scr_act());
 }
@@ -195,61 +202,6 @@ static void analytics_create(lv_obj_t * parent)
 	//lv_obj_set_style_line_width(obj_chart, 0, LV_PART_ITEMS);
 
 	lv_obj_add_event_cb(obj_chart, chart_event_cb, LV_EVENT_ALL, NULL);
-
-
-	/*
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));
-	lv_chart_set_next_value(obj_chart, series1, lv_rand(0,100));*/
 }
 
 static void chart_event_cb(lv_event_t * e)
@@ -309,6 +261,7 @@ void find_min_max()
 {
 	min = 0x7FFF;
 	max = 0;
+	int16_t i;
 
 	for ( i = 0; i < data_points; i++)
 	{
@@ -351,13 +304,163 @@ void stats_task() {
 
 		}
 		//lv_chart_refresh(obj_chart);
-		ESP_LOGI( "stats", "New data_point temp %.03f\u00b0C value %d, total %d, min %d max %d delay %ld", heater_status.env, data[data_points-1], data_points, min, max, xTimeIncrement);
+		ESP_LOGD( "stats", "New data_point temp %.03f\u00b0C value %d, total %d, min %d max %d delay %ld", heater_status.env, data[data_points-1], data_points, min, max, xTimeIncrement);
 
 	} while (true);
+}
+
+#define STATS_FILE "/data/stats.bin"
+
+esp_err_t stats_save(){
+   struct stat file_stat;
+	FILE *fd = NULL;
+	size_t filesize;
+	time_t now;
+
+	if(data_points == 0){
+		ESP_LOGW(TAG, "No datapoints!");
+      return ESP_FAIL;
+	}
+	else{
+		ESP_LOGW(TAG, "Have %d datapoints.", data_points);
+	}
+	if(stat(STATS_FILE, &file_stat) == 0){										// Is there a previous stats file?
+		ESP_LOGI(TAG, "Deleting file : %s", STATS_FILE);
+		unlink(STATS_FILE);																// Delete it
+	}
+   fd = fopen(STATS_FILE, "w");
+   if(!fd) {
+      ESP_LOGE(TAG, "Failed to create file : %s", STATS_FILE);
+      return ESP_FAIL;
+   }
+	time(&now);
+	if(fwrite(&now, 1, sizeof(now), fd) != sizeof(now)){
+		fclose(fd);
+		unlink(STATS_FILE);	
+		ESP_LOGE(TAG, "File write failed!");
+		return ESP_FAIL;
+	}
+	if(fwrite(&data_points, 1, sizeof(data_points), fd) != sizeof(data_points)){
+		fclose(fd);
+		unlink(STATS_FILE);	
+		ESP_LOGE(TAG, "File write failed!");
+		return ESP_FAIL;
+	}
+	filesize =  data_points * sizeof(data[0]);
+	if(fwrite(&data, 1, filesize, fd) != filesize){
+		fclose(fd);
+		unlink(STATS_FILE);	
+		ESP_LOGE(TAG, "File write failed!");
+		return ESP_FAIL;
+	}
+   ESP_LOGI(TAG, "Writen to file : %s, %d bytes", STATS_FILE, sizeof(time_t) + sizeof(data_points) + filesize);
+	fclose(fd);
+	return(ESP_OK);
+}
+
+#define SIZE_TIME_T sizeof(time_t)
+#define MAX_BUFFER_SIZE (8+4+(24*8*2)+4)
+
+bool stats_read_postponed = false;
+
+esp_err_t stats_read(){
+	struct stat file_stat;
+	size_t filesize;
+	FILE *fd = NULL;
+	void *buffer;
+	time_t now, *saved_time;
+	int16_t *saved_count, empty_count, count;
+	lv_coord_t *saved_points, floor = 0x7FFF;
+
+	if (stat(STATS_FILE, &file_stat) == -1) {									// File available?
+		ESP_LOGE(TAG, "Failed to stat file: %s", STATS_FILE);
+		return ESP_FAIL;
+	}
+	if(file_stat.st_size > MAX_BUFFER_SIZE){
+		ESP_LOGE(TAG, "File %stoo long, %ld bytes", STATS_FILE, file_stat.st_size);
+		return ESP_FAIL;
+	}
+	filesize = file_stat.st_size;
+	buffer = malloc(filesize);
+	if(buffer == NULL){
+		ESP_LOGE(TAG, "Can not allocate %d bytes", filesize);
+		return ESP_FAIL;
+	}
+	fd = fopen(STATS_FILE, "r");													// Open for reading
+	if (!fd) {
+		ESP_LOGE(TAG, "Failed to read existing file: %s", STATS_FILE);
+		return ESP_FAIL;
+	}
+	if(fread(buffer, 1, filesize, fd) != filesize){
+		fclose(fd);
+		unlink(STATS_FILE);	
+		ESP_LOGE(TAG, "File read failed!");
+		return ESP_FAIL;
+	}
+	fclose(fd);
+
+	time(&now);
+	if(now < 60*60){
+		stats_read_postponed = true;
+		free(buffer);
+		ESP_LOGW(TAG, "Time not valid, stats read defered.");
+		return ESP_FAIL;
+	}
+	saved_time = buffer;
+	saved_count = buffer + 8;
+	saved_points = buffer + 10;
+	
+	if( *saved_time < (now - DAY_TO_S(1))){
+		unlink(STATS_FILE);	
+		free(buffer);
+		ESP_LOGW(TAG, "Data more than 24 h old.");
+		return ESP_FAIL;
+	} else if(*saved_time > now){
+		stats_read_postponed = true;
+		free(buffer);
+		ESP_LOGW(TAG, "File time in the future, read stats defered.");
+		return ESP_FAIL;
+	}
+	empty_count = (now - *saved_time) / (60*7.5);
+	ESP_LOGI(TAG, "Delta time %lld seconds or %lld minutes or %lld hours.", (now - *saved_time), (now - *saved_time)/60, (now - *saved_time)/(60*60));
+	ESP_LOGI(TAG, "Empty count %d.", empty_count);
+	ESP_LOGI(TAG, "Saved count %d.", *saved_count);
+
+	if((empty_count + *saved_count) > DATA_POINTS)
+	{
+		count = DATA_POINTS - empty_count;
+	}else{
+		count = *saved_count;
+	}
+	for (size_t i = 0; i < count; i++)
+	{
+		if(*saved_points < floor)
+		{
+			floor = *saved_points;
+		}
+		ESP_LOGI(TAG, "Save point %d to %d", i, data_points);
+		data[data_points++] = *saved_points++;
+	}
+	for (size_t i = 0; i < empty_count; i++)
+	{
+		ESP_LOGI(TAG, "Save empty point %d to %d", i, data_points);
+		data[data_points++] = floor;
+	}
+	free(buffer);
+	find_min_max();
+	if(max - min > 10)
+	{
+		lv_chart_set_range(obj_chart, LV_CHART_AXIS_PRIMARY_Y, min, max);
+	} else {
+		lv_chart_set_range(obj_chart, LV_CHART_AXIS_PRIMARY_Y, min, min + 10);
+	}
+	stats_read_postponed = false;
+	return ESP_OK;
 }
 
 void stats_start()
 {
 	lv_chart_set_point_count(obj_chart, DATA_POINTS);
+	stats_read();
 	xTaskCreate( stats_task, "stats", 4096, NULL, STATS_TASK_PRIORITY, NULL );
 }

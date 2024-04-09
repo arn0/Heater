@@ -16,6 +16,7 @@
 #include "mount.h"
 #include "task_priorities"
 #include "heater.h"
+#include "lvgl_ui.h"
 #include "json.h"
 
 #define HEATER_WEB_STEP 0.5
@@ -178,7 +179,7 @@ void send_sensor_update(){
 						if (websock_clients[i].handle != NULL)
 						{
 							json_string = json_update();
-							ESP_LOGI( TAG, "json_str: %s", json_string );
+							ESP_LOGD( TAG, "json_str: %s", json_string );
 							send_sensor_update_frame(json_string, i);
 						}
 					}
@@ -259,6 +260,12 @@ static esp_err_t get_ws_handler( httpd_req_t *req )
 				heater_status.target += HEATER_WEB_STEP;
 				heater_status.web |= TAR_W_FL;
 				next_log_time = 0;		// send update immediately
+				break;
+			
+			case 'S':
+				if(strcmp((char *) ws_pkt.payload, "SavePoints") == 0){
+					stats_save();
+				}
 				break;
 		}
    }

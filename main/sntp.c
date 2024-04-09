@@ -10,6 +10,7 @@
 #include "lwip/ip_addr.h"
 #include "esp_sntp.h"
 
+#include "lvgl_ui.h"
 #include "sntp.h"
 
 static const char *TAG = "sntp";
@@ -21,6 +22,9 @@ void time_sync_notification_cb(struct timeval *tv)
 {
 	sntp_valid = true;
 	ESP_LOGI(TAG, "Notification of a time synchronization event");
+	if(stats_read_postponed == true){
+		stats_read();
+	}
 }
 
 void timezone_set()

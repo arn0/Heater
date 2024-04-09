@@ -95,7 +95,10 @@ html {
   .icon-matter {
    mask: url("matter.svg");
   }
-  .icon {
+  .icon-tools {
+    mask: url("tools.svg");
+   }
+   .icon {
    display: inline-block;
    width: 32px;
    height: 32px;
