@@ -108,7 +108,7 @@ void lcd_start(void)
     //};
     //ESP_ERROR_CHECK(gpio_config(&bk_gpio_config));
 
-    ESP_LOGI(TAG, "Initialize SPI bus");
+    ESP_LOGD(TAG, "Initialize SPI bus");
     spi_bus_config_t buscfg = {
         .sclk_io_num = EXAMPLE_PIN_NUM_SCLK,
         .mosi_io_num = EXAMPLE_PIN_NUM_MOSI,
@@ -119,7 +119,7 @@ void lcd_start(void)
     };
     ESP_ERROR_CHECK(spi_bus_initialize(LCD_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
-    ESP_LOGI(TAG, "Install panel IO");
+    ESP_LOGD(TAG, "Install panel IO");
     esp_lcd_panel_io_handle_t io_handle = NULL;
     esp_lcd_panel_io_spi_config_t io_config = {
         .dc_gpio_num = EXAMPLE_PIN_NUM_LCD_DC,
@@ -134,7 +134,7 @@ void lcd_start(void)
     };
     // Attach the LCD to the SPI bus
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)LCD_HOST, &io_config, &io_handle));
-    ESP_LOGI(TAG, "Attach the LCD to the SPI bus");
+    ESP_LOGD(TAG, "Attach the LCD to the SPI bus");
 
     esp_lcd_panel_handle_t panel_handle = NULL;
     esp_lcd_panel_dev_config_t panel_config = {
@@ -142,7 +142,7 @@ void lcd_start(void)
         .rgb_endian = LCD_RGB_ENDIAN_BGR,
         .bits_per_pixel = 16,
     };
-    ESP_LOGI(TAG, "Install GC9A01 panel driver");
+    ESP_LOGD(TAG, "Install GC9A01 panel driver");
     ESP_ERROR_CHECK(esp_lcd_new_panel_gc9a01(io_handle, &panel_config, &panel_handle));
 
     ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
@@ -153,7 +153,7 @@ void lcd_start(void)
     // user can flush pre-defined pattern to the screen before we turn on the screen or backlight
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
-    ESP_LOGI(TAG, "Initialize LVGL library");
+    ESP_LOGD(TAG, "Initialize LVGL library");
     lv_init();
     // alloc draw buffers used by LVGL
     // it's recommended to choose the size of the draw buffer(s) to be at least 1/10 screen sized
@@ -164,7 +164,7 @@ void lcd_start(void)
     // initialize LVGL draw buffers
     lv_disp_draw_buf_init(&disp_buf, buf1, buf2, EXAMPLE_LCD_H_RES * 20);
 
-    ESP_LOGI(TAG, "Register display driver to LVGL");
+    ESP_LOGD(TAG, "Register display driver to LVGL");
     lv_disp_drv_init(&disp_drv);
     disp_drv.hor_res = EXAMPLE_LCD_H_RES;
     disp_drv.ver_res = EXAMPLE_LCD_V_RES;
@@ -174,7 +174,7 @@ void lcd_start(void)
     disp_drv.user_data = panel_handle;
     lv_disp_t *disp = lv_disp_drv_register(&disp_drv);
 
-    ESP_LOGI(TAG, "Install LVGL tick timer");
+    ESP_LOGD(TAG, "Install LVGL tick timer");
     // Tick interface for LVGL (using esp_timer to generate 2ms periodic event)
     const esp_timer_create_args_t lvgl_tick_timer_args = {
         .callback = &example_increase_lvgl_tick,
@@ -184,7 +184,7 @@ void lcd_start(void)
     ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
     ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, EXAMPLE_LVGL_TICK_PERIOD_MS * 1000));
 
-    ESP_LOGI(TAG, "Display LVGL Meter Widget");
+    ESP_LOGD(TAG, "Display LVGL Display Widget");
     example_lvgl_demo_ui(disp);
 
     //while (1) {
