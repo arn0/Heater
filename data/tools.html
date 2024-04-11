@@ -2,22 +2,40 @@
 <html>
 
 <head>
- <meta charset="UTF-8">
- <title>Radiator</title>
- <script src="tools.js" type="text/javascript" defer=""></script>
- <link rel="stylesheet" type="text/css" href="index.css">
+	<meta charset="UTF-8">
+	<title>Radiator</title>
+	<script src="tools.js" type="text/javascript" defer=""></script>
+	<link rel="stylesheet" type="text/css" href="index.css">
 </head>
 
 <body>
-   <div>
-      <h1>Radiator Tools</h1>
-   </div>
-   <div>
-      <button id="points">Save data points</button>
-   </div>
-   <div>
-      <a href="index.html">Home</a>
-   </div>
+	<div>
+		<h1>Radiator Tools</h1>
+	</div>
+
+	<div>
+		<button id="points">Save data points</button>
+	</div>
+
+	<div>
+		<label for="newfile">Upload a file</label>
+	</div>
+
+	<div>
+		<input id="newfile" type="file" onchange="setpath()" style="width:100%;">
+	</div>
+
+	<div>
+		<label for="filepath">Set path on server</label>
+	</div>
+	<div>
+		<input id="filepath" type="text" style="width:100%;">
+		<button id="upload" type="button" onclick="upload()">Upload</button>
+	</div>
+
+	 <div>
+			<a href="index.html">Home</a>
+	 </div>
 </body>
 
 </html>
