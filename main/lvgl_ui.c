@@ -72,7 +72,7 @@ void lvgl_ui_update(void)
 	{
 		lv_label_set_text(obj_time, strftime_buf);
 		lv_label_set_text_fmt(obj_t_4, "%.01f\u00b0C", heater_status.target);
-		lv_label_set_text_fmt(obj_t_1, "%.01f\u00b0C", heater_status.env);
+		lv_label_set_text_fmt(obj_t_1, "%.01f\u00b0C", heater_status.fnt);
 		lv_label_set_text_fmt(obj_t_2, "%.01f\u00b0C", heater_status.top);
 		lv_label_set_text_fmt(obj_t_3, "%.01f\u00b0C", heater_status.bot);
 
@@ -292,9 +292,9 @@ void stats_task() {
 			ESP_LOGW( "stats", "Task was not delayed" );
 		}
 		if(data_points < DATA_POINTS){
-			data[data_points++] = (int16_t) (heater_status.env * 100);
+			data[data_points++] = (int16_t) (heater_status.fnt * 100);
 		} else {
-			lv_chart_set_next_value(obj_chart, series1, (int16_t) (heater_status.env * 100));
+			lv_chart_set_next_value(obj_chart, series1, (int16_t) (heater_status.fnt * 100));
 		}
 		find_min_max();
 		if(max - min > 10) {
@@ -304,7 +304,7 @@ void stats_task() {
 
 		}
 		//lv_chart_refresh(obj_chart);
-		ESP_LOGD( "stats", "New data_point temp %.03f\u00b0C value %d, total %d, min %d max %d delay %ld", heater_status.env, data[data_points-1], data_points, min, max, xTimeIncrement);
+		ESP_LOGD( "stats", "New data_point temp %.03f\u00b0C value %d, total %d, min %d max %d delay %ld", heater_status.fnt, data[data_points-1], data_points, min, max, xTimeIncrement);
 
 	} while (true);
 }

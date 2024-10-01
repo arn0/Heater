@@ -13,7 +13,8 @@ extern "C" {
 struct snapshot {
 	time_t time;
 	float target;
-	float env;
+	float fnt;
+	float bck;
 	float bot;
 	float top;
 	float chip;

@@ -6,7 +6,8 @@ const target = document.getElementById("input");
 const dec = document.getElementById("decrement");
 
 const te_rem = document.getElementById("te_rem");
-const te_frt = document.getElementById("te_frt");
+const te_fnt = document.getElementById("te_fnt");
+const te_bck = document.getElementById("te_bck");
 const te_top = document.getElementById("te_top");
 const te_bot = document.getElementById("te_bot");
 const te_chp = document.getElementById("te_chp");
@@ -52,7 +53,8 @@ function onMessage(event) {
 	addSnapshot(update);
 	//console.log(event.data);
 	te_rem.textContent = update.rem.toFixed(1);
-	te_frt.textContent = update.env.toFixed(1);
+	te_fnt.textContent = update.fnt.toFixed(1);
+	te_bck.textContent = update.bck.toFixed(1);
 	te_top.textContent = update.top.toFixed(1);
 	te_bot.textContent = update.bot.toFixed(1);
 	te_chp.textContent = update.chip.toFixed(1);

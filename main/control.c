@@ -39,7 +39,7 @@ void control_task(){
 		// here we need to implement a feedback control loop
 		// now just for testing
 
-		delta = heater_status.target - heater_status.env;
+		delta = heater_status.target - heater_status.fnt;
 		if( delta <= 0 ){
 			heater_status.one_set = false;
 			heater_status.two_set = false;

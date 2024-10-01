@@ -14,18 +14,20 @@ extern "C" {
 
 #define TAR_W_FL 0b1
 #define CHP_W_FL 0b10
-#define TOP_W_FL 0b100
-#define BOT_W_FL 0b1000
-#define ENV_W_FL 0b10000
-#define REM_W_FL 0b100000
-#define VLT_W_FL 0b1000000
-#define CUR_W_FL 0b10000000
-#define ONE_W_FL 0b100000000
-#define TWO_W_FL 0b1000000000
+#define FNT_W_FL 0b100
+#define BCK_W_FL 0b1000
+#define TOP_W_FL 0b10000
+#define BOT_W_FL 0b100000
+#define REM_W_FL 0b1000000
+#define VLT_W_FL 0b10000000
+#define CUR_W_FL 0b100000000
+#define ONE_W_FL 0b1000000000
+#define TWO_W_FL 0b10000000000
 
 struct heater_status {
 	float target;
-	float env;
+	float fnt;
+	float bck;
 	float bot;
 	float top;
 	float chip;

@@ -15,12 +15,13 @@
 #include "logger.h"
 #include "monitor.h"
 
-#define HEATER_ONEWIRE_MAX_DS18B20 3							// No more then 3 installed
+#define HEATER_ONEWIRE_MAX_DS18B20 4							// No more then 4 installed
 
-// ds18b20 addresses
-#define DS18B20_ENV 0xC283138009646128
-#define DS18B20_TOP 0x94116F8009646128
-#define DS18B20_BOT 0x2CB9958109646128
+// installed ds18b20 addresses
+#define DS18B20_BOT 0x8104478009646128
+#define DS18B20_TOP 0xFD644E8109646128
+#define DS18B20_BCK 0x68AA918109646128
+#define DS18B20_FNT 0x1E5C778109646128
 
 static const char *TAG = "monitor";
 
@@ -29,13 +30,14 @@ temperature_sensor_handle_t temp_sensor = NULL;
 
 ds18b20_device_handle_t ds18b20s[HEATER_ONEWIRE_MAX_DS18B20];
 
-ds18b20_device_handle_t t_sensor_env = NULL;
+ds18b20_device_handle_t t_sensor_fnt = NULL;
+ds18b20_device_handle_t t_sensor_bck = NULL;
 ds18b20_device_handle_t t_sensor_top = NULL;
 ds18b20_device_handle_t t_sensor_bot = NULL;
 
 int ds18b20_device_num = 0;										// number of ds18b20 devices found
 
-/* @brief Set ESP32 Serial Configuration for PZEM*/
+/* @brief Set ESP32 Serial Configuration for PZEM */
 pzem_setup_t pzConf =
 {
     .pzem_uart   = UART_NUM_1,              /*  <== Specify the UART you want to use, UART_NUM_0, UART_NUM_1, UART_NUM_2 (ESP32 specific) */
@@ -80,45 +82,62 @@ void monitor_task(){
 
 				// ds18b20 temperature reading
 			case 1:
-				if(t_sensor_env){
-					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_env));
+				if(t_sensor_fnt){
+					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_fnt));
 				}
 				break;
 
 			case 2:
-				if(t_sensor_env){
-					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_env, &heater_status.env));
-					heater_status.web |= ENV_W_FL;
+				if(t_sensor_fnt){
+					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_fnt, &heater_status.fnt));
+					heater_status.web |= FNT_W_FL;
+					ESP_LOGD(TAG, "fnt: %f", heater_status.fnt);
 				}
 				break;
 
 			case 3:
+				if(t_sensor_bck){
+					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_bck));
+				}
+				break;
+
+			case 4:
+				if(t_sensor_bck){
+					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bck, &heater_status.bck));
+					heater_status.web |= BCK_W_FL;
+					ESP_LOGD(TAG, "bck: %f", heater_status.bck);
+				}
+				break;
+
+			case 5:
 				if(t_sensor_top){
 					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_top));
 				}
 				break;
 
-			case 4:
+			case 6:
 				if(t_sensor_top){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_top, &heater_status.top));
 					heater_status.web |= TOP_W_FL;
+					ESP_LOGD(TAG, "top: %f", heater_status.top);
 				}
 				break;
 
-			case 5:
+			case 7:
 				if(t_sensor_bot){
 					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_bot));
 				}
 				break;
 
-			case 6:
+			case 8:
 				if(t_sensor_bot){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bot, &heater_status.bot));
 					heater_status.web |= BOT_W_FL;
+					ESP_LOGD(TAG, "bot: %f", heater_status.bot);
 				}
 				break;
 
-			case 7:
+			case 9:
 				time(&now);
 				if(now > log_update_time + 60){
 					log_add();
@@ -157,7 +176,6 @@ bool start_monitor_task(){
 	ESP_LOGI(TAG, "Enable temperature sensor");
 	ESP_ERROR_CHECK(temperature_sensor_enable(temp_sensor));
 
-
 	// install 1-wire bus
 	onewire_bus_handle_t bus = NULL;
 	onewire_bus_config_t bus_config = { .bus_gpio_num = ONEWIRE_BUS_GPIO_PIN,    };
@@ -180,23 +198,42 @@ bool start_monitor_task(){
 			// check if the device is a DS18B20, if so, return the ds18b20 handle
 			if (ds18b20_new_device(&next_onewire_device, &ds_cfg, &ds18b20s[ds18b20_device_num]) == ESP_OK) {
 				ESP_LOGI(TAG, "Found a DS18B20[%d], address: %016llX", ds18b20_device_num, next_onewire_device.address);
+				// Match the found sensors to the position these are mounted
+				switch( next_onewire_device.address ) {
+					case DS18B20_FNT:
+						t_sensor_fnt = ds18b20s[ds18b20_device_num];
+						ESP_LOGI(TAG, "Device, address: %016llX is t_sensor_fnt, number %d", next_onewire_device.address, ds18b20_device_num);
+						break;
+					
+					case DS18B20_BCK:
+						t_sensor_bck = ds18b20s[ds18b20_device_num];
+						ESP_LOGI(TAG, "Device, address: %016llX is t_sensor_bck, number %d", next_onewire_device.address, ds18b20_device_num);
+						break;
+					
+					case DS18B20_TOP:
+						t_sensor_top = ds18b20s[ds18b20_device_num];
+						ESP_LOGI(TAG, "Device, address: %016llX is t_sensor_top, number %d", next_onewire_device.address, ds18b20_device_num);
+						break;
+					
+					case DS18B20_BOT:
+						t_sensor_bot = ds18b20s[ds18b20_device_num];
+						ESP_LOGI(TAG, "Device, address: %016llX is t_sensor_bot, number %d", next_onewire_device.address, ds18b20_device_num);
+						break;
+					
+					default:
+						ESP_LOGE(TAG, "Found a device with unknown address: %016llX", next_onewire_device.address);
+						break;
+				}
 				ds18b20_device_num++;
 			} else {
 				ESP_LOGI(TAG, "Found an unknown device, address: %016llX", next_onewire_device.address);
 			}
 		}
-	} while (search_result != ESP_ERR_NOT_FOUND);
+	} while (search_result != ESP_ERR_NOT_FOUND && ds18b20_device_num < HEATER_ONEWIRE_MAX_DS18B20);
 	ESP_ERROR_CHECK(onewire_del_device_iter(iter));
 	ESP_LOGI(TAG, "Searching done, %d DS18B20 device(s) found", ds18b20_device_num);
 
 	// Now you have the DS18B20 sensor handle, you can use it to read the temperature
-
-	// Here we have to match the found sensors to the position these are mounted
-
-	t_sensor_env = ds18b20s[0];
-	t_sensor_top = ds18b20s[1];
-	t_sensor_bot = ds18b20s[2];
-
 	
    PzemInit( &pzConf );     /* Initialize/Configure UART */
 

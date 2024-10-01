@@ -14,7 +14,8 @@ namespace MyJsonNamespace {
       time(&this->Jnow);
       this->doc["time"] = this->Jnow;
       this->doc["target"] = heater_status.target;
-      this->doc["env"] = heater_status.env;
+      this->doc["fnt"] = heater_status.fnt;
+      this->doc["bck"] = heater_status.bck;
       this->doc["top"] = heater_status.top;
       this->doc["bot"] = heater_status.bot;
       this->doc["chip"] = heater_status.chip;

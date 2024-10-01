@@ -26,7 +26,8 @@ static const char filepath[] = "/data/log.bin";
 esp_err_t log_add(){
 	time(&(log_base[log_counter].time));
 	log_base[log_counter].target = heater_status.target;
-	log_base[log_counter].env = heater_status.env;
+	log_base[log_counter].fnt = heater_status.fnt;
+	log_base[log_counter].bck = heater_status.bck;
 	log_base[log_counter].bot = heater_status.bot;
 	log_base[log_counter].top = heater_status.top;
 	log_base[log_counter].chip = heater_status.chip;
@@ -145,8 +146,8 @@ esp_err_t log_read(){
 int16_t log_fill(){
 	while(gaps--)
 	{
-		return((int16_t) (heater_status.env * 100));
+		return((int16_t) (heater_status.fnt * 100));
 	}
-		return((int16_t) (heater_status.env * 100));
+		return((int16_t) (heater_status.fnt * 100));
 	
 }
