@@ -1,9 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>					//Requires by memset
+#include <sys/param.h>
+#include <sys/unistd.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
+#include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "spi_flash_mmap.h"
