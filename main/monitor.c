@@ -67,9 +67,9 @@ void monitor_task(){
 
       if(PzemGetValues( &pzConf, &pzValues )){
 			heater_status.voltage = pzValues.voltage;
-			heater_status.current = pzValues.current;
-			heater_status.power = pzValues.power;
-			heater_status.energy = pzValues.energy;
+			heater_status.current = pzValues.current/5;
+			heater_status.power = pzValues.power/5;
+			heater_status.energy = pzValues.energy/5;
 			heater_status.pf = pzValues.pf;
 		}
 
@@ -234,8 +234,10 @@ bool start_monitor_task(){
 	ESP_LOGI(TAG, "Searching done, %d DS18B20 device(s) found", ds18b20_device_num);
 
 	// Now you have the DS18B20 sensor handle, you can use it to read the temperature
-	
+
    PzemInit( &pzConf );     /* Initialize/Configure UART */
+	PzReadAddress(&pzConf);
+	ESP_LOGI(TAG, "pzem adress: %d", PzReadAddress(&pzConf));
 
 	time(&log_saved_time);
 	log_update_time = log_saved_time;

@@ -1,3 +1,4 @@
+#ifdef NOTHING
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -46,3 +47,4 @@ void PMonTask( void * pz )
 
     vTaskDelete( NULL );
 }
+#endif
