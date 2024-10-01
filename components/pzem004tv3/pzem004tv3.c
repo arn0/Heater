@@ -266,7 +266,7 @@ bool PzemGetValues( pzem_setup_t *pzSetup, _current_values_t *pmonValues )
         ESP_LOGV( LOG_TAG, "Retreived buffer CRC check failed" );
         return false;
     } else {
-        ESP_LOGI( LOG_TAG, "CRC check OK for GetValues()" );
+        ESP_LOGV( LOG_TAG, "CRC check OK for GetValues()" );
     }
 
     pmonValues->voltage = ( ( uint32_t ) respbuff[ 3 ] << 8 | /* Raw voltage in 0.1V */
