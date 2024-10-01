@@ -34,13 +34,7 @@ static const char *TAG = "spi_lcd";
 #define EXAMPLE_LCD_PIXEL_CLOCK_HZ     (20 * 1000 * 1000)
 #define EXAMPLE_LCD_BK_LIGHT_ON_LEVEL  1
 #define EXAMPLE_LCD_BK_LIGHT_OFF_LEVEL !EXAMPLE_LCD_BK_LIGHT_ON_LEVEL
-#define EXAMPLE_PIN_NUM_SCLK           18
-#define EXAMPLE_PIN_NUM_MOSI           19
 #define EXAMPLE_PIN_NUM_MISO           0
-#define EXAMPLE_PIN_NUM_LCD_DC         20
-#define EXAMPLE_PIN_NUM_LCD_RST        21
-#define EXAMPLE_PIN_NUM_LCD_CS         0
-#define EXAMPLE_PIN_NUM_BK_LIGHT       0
 #define EXAMPLE_PIN_NUM_TOUCH_CS       0
 
 // The pixel number in horizontal and vertical
@@ -110,8 +104,8 @@ void lcd_start(void)
 
     ESP_LOGD(TAG, "Initialize SPI bus");
     spi_bus_config_t buscfg = {
-        .sclk_io_num = EXAMPLE_PIN_NUM_SCLK,
-        .mosi_io_num = EXAMPLE_PIN_NUM_MOSI,
+        .sclk_io_num = LCD_SPI_SCL_GPIO_PIN,
+        .mosi_io_num = LCD_SPI_SDA_GPIO_PIN,
         .miso_io_num = EXAMPLE_PIN_NUM_MISO,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
@@ -122,8 +116,8 @@ void lcd_start(void)
     ESP_LOGD(TAG, "Install panel IO");
     esp_lcd_panel_io_handle_t io_handle = NULL;
     esp_lcd_panel_io_spi_config_t io_config = {
-        .dc_gpio_num = EXAMPLE_PIN_NUM_LCD_DC,
-        .cs_gpio_num = EXAMPLE_PIN_NUM_LCD_CS,
+        .dc_gpio_num = LCD_SPI_DC_GPIO_PIN,
+        .cs_gpio_num = LCD_SPI_CS_GPIO_PIN,
         .pclk_hz = EXAMPLE_LCD_PIXEL_CLOCK_HZ,
         .lcd_cmd_bits = EXAMPLE_LCD_CMD_BITS,
         .lcd_param_bits = EXAMPLE_LCD_PARAM_BITS,
@@ -138,7 +132,7 @@ void lcd_start(void)
 
     esp_lcd_panel_handle_t panel_handle = NULL;
     esp_lcd_panel_dev_config_t panel_config = {
-        .reset_gpio_num = EXAMPLE_PIN_NUM_LCD_RST,
+        .reset_gpio_num = LCD_SPI_RST_GPIO_PIN,
         .rgb_endian = LCD_RGB_ENDIAN_BGR,
         .bits_per_pixel = 16,
     };

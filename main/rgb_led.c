@@ -75,7 +75,7 @@ led_strip_handle_t configure_led(void)
 {
 	// LED strip general initialization, according to your led board design
 	led_strip_config_t strip_config = {
-		.strip_gpio_num = LED_STRIP_GPIO,   // The GPIO that connected to the LED strip's data line
+		.strip_gpio_num = LED_STRIP_GPIO_PIN,   // The GPIO that connected to the LED strip's data line
 		.max_leds = LED_STRIP_LED_NUMBERS,        // The number of LEDs in the strip,
 		.led_pixel_format = LED_PIXEL_FORMAT_GRB, // Pixel format of your LED strip
 		.led_model = LED_MODEL_WS2812,            // LED strip model

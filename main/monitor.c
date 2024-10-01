@@ -1,5 +1,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_mac.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "driver/temperature_sensor.h"
@@ -38,8 +39,8 @@ int ds18b20_device_num = 0;										// number of ds18b20 devices found
 pzem_setup_t pzConf =
 {
     .pzem_uart   = UART_NUM_1,              /*  <== Specify the UART you want to use, UART_NUM_0, UART_NUM_1, UART_NUM_2 (ESP32 specific) */
-    .pzem_rx_pin = GPIO_NUM_16,             /*  <== GPIO for RX */
-    .pzem_tx_pin = GPIO_NUM_17,             /*  <== GPIO for TX */
+    .pzem_rx_pin = PZEM_RX_GPIO_PIN,            /*  <== GPIO for RX */
+    .pzem_tx_pin = PZEM_TX_GPIO_PIN,            /*  <== GPIO for TX */
     .pzem_addr   = PZ_DEFAULT_ADDRESS,      /*  If your module has a different address, specify here or update the variable in pzem004tv3.h */
 };
 _current_values_t pzValues;            		  /* Measured values */
@@ -159,7 +160,7 @@ bool start_monitor_task(){
 
 	// install 1-wire bus
 	onewire_bus_handle_t bus = NULL;
-	onewire_bus_config_t bus_config = { .bus_gpio_num = ONEWIRE_BUS_GPIO,    };
+	onewire_bus_config_t bus_config = { .bus_gpio_num = ONEWIRE_BUS_GPIO_PIN,    };
 	
 	// 1 byte ROM command + 8 byte ROM number + 1 byte device command
 	onewire_bus_rmt_config_t rmt_config = { .max_rx_bytes = 10,     };

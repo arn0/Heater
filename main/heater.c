@@ -17,7 +17,7 @@
  * GPIO_OUTPUT_PIN_SEL                0000000000000000000011000000000000000000
  */
 
-#define GPIO_OUTPUT_PIN_SEL  ((1ULL<<SSR_ONE_GPIO) | (1ULL<<SSR_TWO_GPIO))
+#define GPIO_OUTPUT_PIN_SEL  ((1ULL<<SSR_ONE_GPIO_PIN) | (1ULL<<SSR_TWO_GPIO_PIN))
 
 static const char *TAG = "heaters";
 
@@ -49,19 +49,19 @@ void heater_task() {
 				if( heater_status.one_set != heater_status.one_pwr ){
 					heater_status.one_pwr = heater_status.one_set;
 					heater_status.web |= ONE_W_FL;
-					gpio_set_level( SSR_ONE_GPIO, heater_status.one_pwr );
+					gpio_set_level( SSR_ONE_GPIO_PIN, heater_status.one_pwr );
 				}
 			} else {
 				tick = true;
 				if( heater_status.two_set != heater_status.two_pwr ){
 					heater_status.two_pwr = heater_status.two_set;
 					heater_status.web |= TWO_W_FL;
-					gpio_set_level( SSR_TWO_GPIO, heater_status.two_pwr );
+					gpio_set_level( SSR_TWO_GPIO_PIN, heater_status.two_pwr );
 				}
 			}
 		} else {
-			gpio_set_level( SSR_ONE_GPIO, 0 );
-			gpio_set_level( SSR_TWO_GPIO, 0 );
+			gpio_set_level( SSR_ONE_GPIO_PIN, 0 );
+			gpio_set_level( SSR_TWO_GPIO_PIN, 0 );
 		}
 	} while (true);
 }
@@ -91,12 +91,12 @@ bool start_heater_task(){
 		ESP_ERROR_CHECK(ret);
 		return(false);
 	}
-	ret = gpio_set_level(SSR_ONE_GPIO, 0);
+	ret = gpio_set_level(SSR_ONE_GPIO_PIN, 0);
 	if( ret != ESP_OK ){
 		ESP_ERROR_CHECK(ret);
 		return(false);
 	}
-	ret = gpio_set_level(SSR_TWO_GPIO, 0);
+	ret = gpio_set_level(SSR_TWO_GPIO_PIN, 0);
 	if( ret != ESP_OK ){
 		ESP_ERROR_CHECK(ret);
 		return(false);
