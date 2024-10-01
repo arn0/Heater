@@ -84,6 +84,11 @@ void monitor_task(){
 			case 1:
 				if(t_sensor_fnt){
 					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_fnt));
+				}
+				break;
+
+			case 2:
+				if(t_sensor_fnt){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_fnt, &heater_status.fnt));
 					heater_status.web |= FNT_W_FL;
 					ESP_LOGD(TAG, "fnt: %f", heater_status.fnt);
@@ -93,6 +98,11 @@ void monitor_task(){
 			case 3:
 				if(t_sensor_bck){
 					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_bck));
+				}
+				break;
+
+			case 4:
+				if(t_sensor_bck){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bck, &heater_status.bck));
 					heater_status.web |= BCK_W_FL;
 					ESP_LOGD(TAG, "bck: %f", heater_status.bck);
@@ -102,6 +112,11 @@ void monitor_task(){
 			case 5:
 				if(t_sensor_top){
 					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_top));
+				}
+				break;
+
+			case 6:
+				if(t_sensor_top){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_top, &heater_status.top));
 					heater_status.web |= TOP_W_FL;
 					ESP_LOGD(TAG, "top: %f", heater_status.top);
@@ -111,6 +126,11 @@ void monitor_task(){
 			case 7:
 				if(t_sensor_bot){
 					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_bot));
+				}
+				break;
+
+			case 8:
+				if(t_sensor_bot){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bot, &heater_status.bot));
 					heater_status.web |= BOT_W_FL;
 					ESP_LOGD(TAG, "bot: %f", heater_status.bot);
