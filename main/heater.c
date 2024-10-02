@@ -18,6 +18,7 @@
  */
 
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<SSR_ONE_GPIO_PIN) | (1ULL<<SSR_TWO_GPIO_PIN))
+#define OVERHEATED 70.0
 
 static const char *TAG = "heaters";
 
@@ -34,6 +35,13 @@ void heater_task() {
 	xPreviousWakeTime = xTaskGetTickCount ();
 
 	do {
+		// Check for overheating
+		if( heater_status.fnt > OVERHEATED || heater_status.bck > OVERHEATED || heater_status.top > OVERHEATED || heater_status.bot > OVERHEATED || heater_status.chip > OVERHEATED ) {
+			heater_status.safe = false;
+			gpio_set_level( SSR_ONE_GPIO_PIN, 0 );
+			gpio_set_level( SSR_TWO_GPIO_PIN, 0 );
+		}
+
 		// Wait for the next cycle.
 		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );
 
@@ -80,10 +88,10 @@ bool start_heater_task(){
 
 	esp_err_t ret;
 
-	gpio_config_t io_conf = {};							//zero-initialize the config structure
-	io_conf.intr_type = GPIO_INTR_DISABLE;				//disable interrupt
+	gpio_config_t io_conf = {};						//zero-initialize the config structure
+	io_conf.intr_type = GPIO_INTR_DISABLE;			//disable interrupt
 	io_conf.mode = GPIO_MODE_OUTPUT;					//set as output mode
-	io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;			//bit mask of the pins that you want to set, e.g. GPIO18/19
+	io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;	//bit mask of the pins that you want to set, e.g. GPIO18/19
 	io_conf.pull_down_en = 0;							//disable pull-down mode
 	io_conf.pull_up_en = 0;								//disable pull-up mode
 	ret = gpio_config(&io_conf);						//configure GPIO with the given settings
