@@ -24,6 +24,7 @@
 #include "events.h"
 #include "mount.h"
 #include "webserver.h"
+#include "bluetooth.h"
 #include "gpio_pins.h"
 #include "rgb_led.h"
 #include "spi_lcd.h"
@@ -61,6 +62,9 @@ void app_main(void)
 
 	ESP_LOGI(TAG, "Start wifi_init_station()");
 	wifi_init_station();
+
+	ESP_LOGI(TAG, "Start bluetooth()");
+	bluetooth_start();
 
 	do {
 		EventBits_t bits;
