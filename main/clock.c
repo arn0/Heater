@@ -42,5 +42,5 @@ void clock_task()
 
 void clock_start(void)
 {
-	xTaskCreate( clock_task, "clock", 4096, NULL, CLOCK_TASK_PRIORITY, NULL );
+	xTaskCreate( clock_task, "clock", 4096/2, NULL, CLOCK_TASK_PRIORITY, NULL );
 }

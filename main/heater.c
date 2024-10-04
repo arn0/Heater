@@ -18,7 +18,7 @@
  */
 
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<SSR_ONE_GPIO_PIN) | (1ULL<<SSR_TWO_GPIO_PIN))
-#define OVERHEATED 70.0
+#define OVERHEATED 90.0
 
 static const char *TAG = "heaters";
 
@@ -115,11 +115,11 @@ bool start_heater_task(){
 	heater_status.two_pwr =false;
 	heater_status.one_set = false;
 	heater_status.two_set = false;
-	heater_status.target = 20;
+	heater_status.target = 21;
 	
 	// Now we start the heater contol loop
 
-	xTaskCreate( heater_task, "heaters", 4096, NULL, HEATER_TASK_PRIORITY, NULL );
+	xTaskCreate( heater_task, "heaters", 4096/2, NULL, HEATER_TASK_PRIORITY, NULL );
 
 	return(true);
 }
