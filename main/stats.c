@@ -66,5 +66,5 @@ void stats_task() {
 
 void stats_start()
 {
-	xTaskCreate( stats_task, "stats", 4096, NULL, STATS_TASK_PRIORITY, NULL );
+//	xTaskCreate( stats_task, "stats", 4096, NULL, STATS_TASK_PRIORITY, NULL );
 }

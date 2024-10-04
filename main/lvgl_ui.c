@@ -460,7 +460,7 @@ esp_err_t stats_read(){
 
 void stats_start()
 {
-	lv_chart_set_point_count(obj_chart, DATA_POINTS);
-	stats_read();
-	xTaskCreate( stats_task, "stats", 4096, NULL, STATS_TASK_PRIORITY, NULL );
+//	lv_chart_set_point_count(obj_chart, DATA_POINTS);
+//	stats_read();
+//	xTaskCreate( stats_task, "stats", 4096, NULL, STATS_TASK_PRIORITY, NULL );
 }
