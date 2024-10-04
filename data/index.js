@@ -74,6 +74,11 @@ function onMessage(event) {
 	}else{
 		indicator2.className = 'indicator-off';
 	}
+	if(update.blue){
+		blue.style.background = '#00c4fa';
+	}else{
+		blue.style.background = '#BEBEBE';
+	}
 	const d = new Date();
 	let text = d.toLocaleString();
 	time.textContent = text;

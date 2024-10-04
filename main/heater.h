@@ -43,6 +43,7 @@ struct heater_status {
 	bool two_pwr;
 	bool two_set;
 	bool safe;
+	bool blue;
 };
 
 // global access to heater staus

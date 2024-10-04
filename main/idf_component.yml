@@ -6,8 +6,9 @@ dependencies:
   espressif/led_strip: "*"
   espressif/ds18b20: "*"
   espressif/onewire_bus: "*"
-  example_init:
-    path: ${IDF_PATH}/examples/bluetooth/esp_ble_mesh/common_components/example_init
+
+  nimble_central_utils:
+    path: ${IDF_PATH}/examples/bluetooth/nimble/common/nimble_central_utils
   ## Required IDF version
   idf:
     version: ">=4.1.0"

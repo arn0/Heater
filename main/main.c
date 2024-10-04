@@ -36,6 +36,8 @@ extern void real_time_stats(void);
 
 static const char *TAG = "main";
 
+bool bluetooth = false;
+
 void app_main(void)
 {
 	timezone_set();
@@ -53,7 +55,7 @@ void app_main(void)
 	//real_time_stats();
 	start_heater_task();			// error check here
 	start_monitor_task();
-	lcd_start();
+	//lcd_start();
 	//led_strip_start();
 	start_control_task();
 	clock_start();
@@ -64,7 +66,10 @@ void app_main(void)
 	wifi_init_station();
 
 	ESP_LOGI(TAG, "Start bluetooth()");
-	bluetooth_start();
+	ret = bluetooth_start();
+	if(ret == ESP_OK) {
+		 bluetooth = true;
+	}
 
 	do {
 		EventBits_t bits;
@@ -97,5 +102,15 @@ void app_main(void)
 		} else {
 			ESP_LOGE(TAG, "UNEXPECTED EVENT");
 		}
-			} while (true);
+
+		if( !bluetooth ) {
+			ESP_LOGI(TAG, "Start bluetooth()");
+			ret = bluetooth_start();
+			if(ret == ESP_OK) {
+				bluetooth = true;
+			} else {
+				bluetooth = false;
+			}
+		}
+	} while (true);
 }

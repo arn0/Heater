@@ -64,12 +64,6 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 1.0.2
-  example_init:
-    dependencies: []
-    source:
-      path: /Users/arno/esp/v5.3.1/esp-idf/examples/bluetooth/esp_ble_mesh/common_components/example_init
-      type: local
-    version: '*'
   idf:
     source:
       type: idf
@@ -81,15 +75,21 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 8.3.11
+  nimble_central_utils:
+    dependencies: []
+    source:
+      path: /Users/arno/esp/v5.3.1/esp-idf/examples/bluetooth/nimble/common/nimble_central_utils
+      type: local
+    version: '*'
 direct_dependencies:
 - espressif/ds18b20
 - espressif/esp_lcd_gc9a01
 - espressif/led_strip
 - espressif/mdns
 - espressif/onewire_bus
-- example_init
 - idf
 - lvgl/lvgl
-manifest_hash: 47c334e3b465fe507323d23db9325817dce7c04654e8cd369362e00669efc42d
+- nimble_central_utils
+manifest_hash: 52e5b662ecb151de31bd401527a7792e43bf93766bb73384e3621ce6438a2928
 target: esp32s3
 version: 2.0.0

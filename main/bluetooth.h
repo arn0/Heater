@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-void bluetooth_start(void);
+esp_err_t bluetooth_start(void);
 
 #ifdef __cplusplus
 }

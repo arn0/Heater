@@ -1,687 +1,749 @@
-/* main.c - Application main entry point */
-
 /*
- * SPDX-FileCopyrightText: 2017 Intel Corporation
- * SPDX-FileContributor: 2018-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2017-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <stdio.h>
-#include <string.h>
-#include <inttypes.h>
-
 #include "esp_log.h"
 #include "nvs_flash.h"
+/* BLE */
+#include "nimble/nimble_port.h"
+#include "nimble/nimble_port_freertos.h"
+#include "host/ble_hs.h"
+#include "host/util/util.h"
+#include "console/console.h"
+#include "services/gap/ble_svc_gap.h"
+#include "ble_htp_cent.h"
 
-#include "esp_ble_mesh_defs.h"
-#include "esp_ble_mesh_common_api.h"
-#include "esp_ble_mesh_provisioning_api.h"
-#include "esp_ble_mesh_networking_api.h"
-#include "esp_ble_mesh_config_model_api.h"
-#include "esp_ble_mesh_sensor_model_api.h"
-
-#include "ble_mesh_example_init.h"
 #include "bluetooth.h"
+#include "heater.h"
 
-#define TAG "bluetooth"
+static const char *tag = "NimBLE_HTP_CENT";
+static int ble_htp_cent_gap_event(struct ble_gap_event *event, void *arg);
+static uint8_t peer_addr[6];
+char temp_type;
+float temp;
 
-#define CID_ESP             0x02E5
+void ble_store_config_init(void);
+static void ble_htp_cent_scan(void);
+/**
+ * Application callback.  Called when the attempt to subscribe to notifications
+ * for the HTP intermediate temperature characteristic has completed.
+ */
+static int
+ble_htp_cent_on_subscribe_temp(uint16_t conn_handle,
+										 const struct ble_gatt_error *error,
+										 struct ble_gatt_attr *attr,
+										 void *arg)
+{
+	MODLOG_DFLT(INFO, "Subscribe to intermediate temperature char completed; status=%d "
+							"conn_handle=%d attr_handle=%d\n",
+					error->status, conn_handle, attr->handle);
+	return 0;
+}
 
-#define PROV_OWN_ADDR       0x0001
+/**
+ * Application callback.  Called when the attempt to subscribe to notifications
+ * for the HTP temperature measurement characteristic has completed.
+ */
+static int
+ble_htp_cent_on_subscribe(uint16_t conn_handle,
+								  const struct ble_gatt_error *error,
+								  struct ble_gatt_attr *attr,
+								  void *arg)
+{
+	MODLOG_DFLT(INFO, "Subscribe to temperature measurement char completed; status=%d "
+							"conn_handle=%d attr_handle=%d\n",
+					error->status, conn_handle, attr->handle);
 
-#define MSG_SEND_TTL        3
-#define MSG_TIMEOUT         0
-#define MSG_ROLE            ROLE_PROVISIONER
+	/* Subscribe to notifications for the intermediate temperature characteristic.
+	 * A central enables notifications by writing two bytes (1, 0) to the
+	 * characteristic's client-characteristic-configuration-descriptor (CCCD).
+	 */
+	const struct peer_dsc *dsc;
+	uint8_t value[2];
+	int rc;
+	const struct peer *peer = peer_find(conn_handle);
 
-#define COMP_DATA_PAGE_0    0x00
+	dsc = peer_dsc_find_uuid(peer,
+									 BLE_UUID16_DECLARE(BLE_SVC_HTP_UUID16),
+									 BLE_UUID16_DECLARE(BLE_SVC_HTP_CHR_UUID16_INTERMEDIATE_TEMP),
+									 BLE_UUID16_DECLARE(BLE_SVC_HTP_DSC_CLT_CFG_UUID16));
+	if (dsc == NULL)
+	{
+		MODLOG_DFLT(ERROR, "Error: Peer lacks a CCCD characteristic\n ");
+		goto err;
+	}
 
-#define APP_KEY_IDX         0x0000
-#define APP_KEY_OCTET       0x12
+	value[0] = 1;
+	value[1] = 0;
+	rc = ble_gattc_write_flat(conn_handle, dsc->dsc.handle,
+									  &value, sizeof value, ble_htp_cent_on_subscribe_temp, NULL);
+	if (rc != 0)
+	{
+		MODLOG_DFLT(ERROR, "Error: Failed to subscribe to characteristic; "
+								 "rc=%d\n",
+						rc);
+		goto err;
+	}
 
-#define COMP_DATA_1_OCTET(msg, offset)      (msg[offset])
-#define COMP_DATA_2_OCTET(msg, offset)      (msg[offset + 1] << 8 | msg[offset])
+	return 0;
+err:
+	/* Terminate the connection. */
+	return ble_gap_terminate(peer->conn_handle, BLE_ERR_REM_USER_CONN_TERM);
 
-static uint8_t  dev_uuid[ESP_BLE_MESH_OCTET16_LEN];
-static uint16_t server_address = ESP_BLE_MESH_ADDR_UNASSIGNED;
-static uint16_t sensor_prop_id;
+	return 0;
+}
 
-static struct esp_ble_mesh_key {
-    uint16_t net_idx;
-    uint16_t app_idx;
-    uint8_t  app_key[ESP_BLE_MESH_OCTET16_LEN];
-} prov_key;
+/**
+ * Application callback.  Called when the write to the HTP measurement interval
+ * characteristic has completed.
+ */
+static int
+ble_htp_cent_on_write(uint16_t conn_handle,
+							 const struct ble_gatt_error *error,
+							 struct ble_gatt_attr *attr,
+							 void *arg)
+{
+	MODLOG_DFLT(INFO, "Write to measurement interval char completed; status=%d "
+							"conn_handle=%d attr_handle=%d\n",
+					error->status, conn_handle, attr->handle);
 
-static esp_ble_mesh_cfg_srv_t config_server = {
-    /* 3 transmissions with 20ms interval */
-    .net_transmit = ESP_BLE_MESH_TRANSMIT(2, 20),
-    .relay = ESP_BLE_MESH_RELAY_DISABLED,
-    .relay_retransmit = ESP_BLE_MESH_TRANSMIT(2, 20),
-    .beacon = ESP_BLE_MESH_BEACON_DISABLED,
-#if defined(CONFIG_BLE_MESH_FRIEND)
-    .friend_state = ESP_BLE_MESH_FRIEND_ENABLED,
+	/* Subscribe to notifications for the temperature measurement characteristic.
+	 * A central enables notifications by writing two bytes (1, 0) to the
+	 * characteristic's client-characteristic-configuration-descriptor (CCCD).
+	 */
+	const struct peer_dsc *dsc;
+	uint8_t value[2];
+	int rc;
+	const struct peer *peer = peer_find(conn_handle);
+
+	dsc = peer_dsc_find_uuid(peer,
+									 BLE_UUID16_DECLARE(BLE_SVC_HTP_UUID16),
+									 BLE_UUID16_DECLARE(BLE_SVC_HTP_CHR_UUID16_TEMP_MEASUREMENT),
+									 BLE_UUID16_DECLARE(BLE_SVC_HTP_DSC_CLT_CFG_UUID16));
+	if (dsc == NULL)
+	{
+		MODLOG_DFLT(ERROR, "Error: Peer lacks a CCCD characteristic\n ");
+		goto err;
+	}
+
+	value[0] = 2;
+	value[1] = 0;
+
+	rc = ble_gattc_write_flat(conn_handle, dsc->dsc.handle,
+									  &value, sizeof value, ble_htp_cent_on_subscribe, NULL);
+	if (rc != 0)
+	{
+		MODLOG_DFLT(ERROR, "Error: Failed to subscribe to characteristic; "
+								 "rc=%d\n",
+						rc);
+		goto err;
+	}
+
+	return 0;
+err:
+	/* Terminate the connection. */
+	return ble_gap_terminate(peer->conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+}
+
+/**
+ * Application callback.  Called when the read of the HTP temperature type
+ * characteristic has completed.
+ */
+static int
+ble_htp_cent_on_read(uint16_t conn_handle,
+							const struct ble_gatt_error *error,
+							struct ble_gatt_attr *attr,
+							void *arg)
+{
+	MODLOG_DFLT(INFO, "Read temperature type char completed; status=%d conn_handle=%d",
+					error->status, conn_handle);
+	if (error->status == 0)
+	{
+		MODLOG_DFLT(INFO, " attr_handle=%d value=", attr->handle);
+		print_mbuf(attr->om);
+	}
+	MODLOG_DFLT(INFO, "\n");
+
+	/* Write two bytes (99, 100) to the measurement interval
+	 * characteristic.
+	 */
+	const struct peer_chr *chr;
+	uint16_t value;
+	int rc;
+	const struct peer *peer = peer_find(conn_handle);
+
+	chr = peer_chr_find_uuid(peer,
+									 BLE_UUID16_DECLARE(BLE_SVC_HTP_UUID16),
+									 BLE_UUID16_DECLARE(BLE_SVC_HTP_CHR_UUID16_MEASUREMENT_ITVL));
+	if (chr == NULL)
+	{
+		MODLOG_DFLT(ERROR, "Error: Peer doesn't support the"
+								 "measurement interval characteristic\n");
+		goto err;
+	}
+
+	value = 2; /* Set measurement interval as 2 secs */
+
+	rc = ble_gattc_write_flat(conn_handle, chr->chr.val_handle,
+									  &value, sizeof value, ble_htp_cent_on_write, NULL);
+	if (rc != 0)
+	{
+		MODLOG_DFLT(ERROR, "Error: Failed to write characteristic; rc=%d\n",
+						rc);
+		goto err;
+	}
+
+	return 0;
+err:
+	/* Terminate the connection. */
+	return ble_gap_terminate(peer->conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+}
+
+/**
+ * Performs three GATT operations against the specified peer:
+ * 1. Reads the HTP temperature type characteristic.
+ * 2. After read is completed, writes the HTP temperature measurement interval characteristic.
+ * 3. After write is completed, subscribes to notifications for the HTP intermediate temperature
+ *    and temperature measurement characteristic.
+ *
+ * If the peer does not support a required service, characteristic, or
+ * descriptor, then the peer lied when it claimed support for the health
+ * thermometer service!  When this happens, or if a GATT procedure fails,
+ * this function immediately terminates the connection.
+ */
+static void
+ble_htp_cent_read_write_subscribe(const struct peer *peer)
+{
+	const struct peer_chr *chr;
+	int rc;
+
+	/* Read the Temperature Type characteristic. */
+	chr = peer_chr_find_uuid(peer,
+									 BLE_UUID16_DECLARE(BLE_SVC_HTP_UUID16),
+									 BLE_UUID16_DECLARE(BLE_SVC_HTP_CHR_UUID16_TEMP_TYPE));
+	if (chr == NULL)
+	{
+		MODLOG_DFLT(ERROR, "Error: Peer doesn't support the Temperature Type"
+								 " characteristic\n");
+		goto err;
+	}
+
+	rc = ble_gattc_read(peer->conn_handle, chr->chr.val_handle,
+							  ble_htp_cent_on_read, NULL);
+	if (rc != 0)
+	{
+		MODLOG_DFLT(ERROR, "Error: Failed to read characteristic; rc=%d\n",
+						rc);
+		goto err;
+	}
+
+	return;
+err:
+	/* Terminate the connection. */
+	ble_gap_terminate(peer->conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+}
+
+/**
+ * Called when service discovery of the specified peer has completed.
+ */
+static void
+ble_htp_cent_on_disc_complete(const struct peer *peer, int status, void *arg)
+{
+
+	if (status != 0)
+	{
+		/* Service discovery failed.  Terminate the connection. */
+		MODLOG_DFLT(ERROR, "Error: Service discovery failed; status=%d "
+								 "conn_handle=%d\n",
+						status, peer->conn_handle);
+		ble_gap_terminate(peer->conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+		return;
+	}
+
+	/* Service discovery has completed successfully.  Now we have a complete
+	 * list of services, characteristics, and descriptors that the peer
+	 * supports.
+	 */
+	MODLOG_DFLT(INFO, "Service discovery complete; status=%d "
+							"conn_handle=%d\n",
+					status, peer->conn_handle);
+
+	/* Now perform three GATT procedures against the peer: read,
+	 * write, and subscribe to notifications for the HTP service.
+	 */
+	ble_htp_cent_read_write_subscribe(peer);
+}
+
+/**
+ * Initiates the GAP general discovery procedure.
+ */
+static void
+ble_htp_cent_scan(void)
+{
+	uint8_t own_addr_type;
+	struct ble_gap_disc_params disc_params;
+	int rc;
+
+	/* Figure out address to use while advertising (no privacy for now) */
+	rc = ble_hs_id_infer_auto(0, &own_addr_type);
+	if (rc != 0)
+	{
+		MODLOG_DFLT(ERROR, "error determining address type; rc=%d\n", rc);
+		return;
+	}
+
+	/* Tell the controller to filter duplicates; we don't want to process
+	 * repeated advertisements from the same device.
+	 */
+	disc_params.filter_duplicates = 1;
+
+	/**
+	 * Perform a passive scan.  I.e., don't send follow-up scan requests to
+	 * each advertiser.
+	 */
+	disc_params.passive = 1;
+
+	/* Use defaults for the rest of the parameters. */
+	disc_params.itvl = 0;
+	disc_params.window = 0;
+	disc_params.filter_policy = 0;
+	disc_params.limited = 0;
+
+	rc = ble_gap_disc(own_addr_type, BLE_HS_FOREVER, &disc_params,
+							ble_htp_cent_gap_event, NULL);
+	if (rc != 0)
+	{
+		MODLOG_DFLT(ERROR, "Error initiating GAP discovery procedure; rc=%d\n",
+						rc);
+	}
+}
+
+/**
+ * Indicates whether we should try to connect to the sender of the specified
+ * advertisement.  The function returns a positive result if the device
+ * advertises connectability and support for the Health Thermometer service.
+ */
+
+#if CONFIG_EXAMPLE_EXTENDED_ADV
+static int
+ext_ble_htp_cent_should_connect(const struct ble_gap_ext_disc_desc *disc)
+{
+	int offset = 0;
+	int ad_struct_len = 0;
+
+	if (disc->legacy_event_type != BLE_HCI_ADV_RPT_EVTYPE_ADV_IND &&
+		 disc->legacy_event_type != BLE_HCI_ADV_RPT_EVTYPE_DIR_IND)
+	{
+		return 0;
+	}
+	if (strlen(CONFIG_EXAMPLE_PEER_ADDR) && (strncmp(CONFIG_EXAMPLE_PEER_ADDR, "ADDR_ANY", strlen("ADDR_ANY")) != 0))
+	{
+		ESP_LOGI(tag, "Peer address from menuconfig: %s", CONFIG_EXAMPLE_PEER_ADDR);
+		/* Convert string to address */
+		sscanf(CONFIG_EXAMPLE_PEER_ADDR, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+				 &peer_addr[5], &peer_addr[4], &peer_addr[3],
+				 &peer_addr[2], &peer_addr[1], &peer_addr[0]);
+		if (memcmp(peer_addr, disc->addr.val, sizeof(disc->addr.val)) != 0)
+		{
+			return 0;
+		}
+	}
+
+	/* The device has to advertise support for the Health thermometer
+	 * service (0x1809).
+	 */
+	do
+	{
+		ad_struct_len = disc->data[offset];
+
+		if (!ad_struct_len)
+		{
+			break;
+		}
+
+		/* Search if HTP UUID is advertised */
+		if (disc->data[offset] == 0x03 && disc->data[offset + 1] == 0x03)
+		{
+			if (disc->data[offset + 2] == 0x18 && disc->data[offset + 3] == 0x09)
+			{
+				return 1;
+			}
+		}
+
+		offset += ad_struct_len + 1;
+
+	} while (offset < disc->length_data);
+
+	return 0;
+}
 #else
-    .friend_state = ESP_BLE_MESH_FRIEND_NOT_SUPPORTED,
+
+static int
+ble_htp_cent_should_connect(const struct ble_gap_disc_desc *disc)
+{
+	struct ble_hs_adv_fields fields;
+	int rc;
+	int i;
+
+	/* The device has to be advertising connectability. */
+	if (disc->event_type != BLE_HCI_ADV_RPT_EVTYPE_ADV_IND &&
+		 disc->event_type != BLE_HCI_ADV_RPT_EVTYPE_DIR_IND)
+	{
+
+		return 0;
+	}
+
+	rc = ble_hs_adv_parse_fields(&fields, disc->data, disc->length_data);
+	if (rc != 0)
+	{
+		return 0;
+	}
+
+	if (strlen(CONFIG_EXAMPLE_PEER_ADDR) && (strncmp(CONFIG_EXAMPLE_PEER_ADDR, "ADDR_ANY", strlen("ADDR_ANY")) != 0))
+	{
+		ESP_LOGI(tag, "Peer address from menuconfig: %s", CONFIG_EXAMPLE_PEER_ADDR);
+		/* Convert string to address */
+		sscanf(CONFIG_EXAMPLE_PEER_ADDR, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+				 &peer_addr[5], &peer_addr[4], &peer_addr[3],
+				 &peer_addr[2], &peer_addr[1], &peer_addr[0]);
+		if (memcmp(peer_addr, disc->addr.val, sizeof(disc->addr.val)) != 0)
+		{
+			return 0;
+		}
+	}
+
+	/* The device has to advertise support for the Health Thermometer
+	 * service (0x1809).
+	 */
+	for (i = 0; i < fields.num_uuids16; i++)
+	{
+		if (ble_uuid_u16(&fields.uuids16[i].u) == BLE_SVC_HTP_UUID16)
+		{
+			return 1;
+		}
+	}
+
+	return 0;
+}
 #endif
-    .default_ttl = 7,
-};
 
-static esp_ble_mesh_client_t config_client;
-static esp_ble_mesh_client_t sensor_client;
-
-static esp_ble_mesh_model_t root_models[] = {
-    ESP_BLE_MESH_MODEL_CFG_SRV(&config_server),
-    ESP_BLE_MESH_MODEL_CFG_CLI(&config_client),
-    ESP_BLE_MESH_MODEL_SENSOR_CLI(NULL, &sensor_client),
-};
-
-static esp_ble_mesh_elem_t elements[] = {
-    ESP_BLE_MESH_ELEMENT(0, root_models, ESP_BLE_MESH_MODEL_NONE),
-};
-
-static esp_ble_mesh_comp_t composition = {
-    .cid = CID_ESP,
-    .element_count = ARRAY_SIZE(elements),
-    .elements = elements,
-};
-
-static esp_ble_mesh_prov_t provision = {
-    .prov_uuid          = dev_uuid,
-    .prov_unicast_addr  = PROV_OWN_ADDR,
-    .prov_start_address = 0x0005,
-};
-
-static void example_ble_mesh_set_msg_common(esp_ble_mesh_client_common_param_t *common,
-                                            esp_ble_mesh_node_t *node,
-                                            esp_ble_mesh_model_t *model, uint32_t opcode)
+/**
+ * Connects to the sender of the specified advertisement of it looks
+ * interesting.  A device is "interesting" if it advertises connectability and
+ * support for the Health Thermometer service.
+ */
+static void
+ble_htp_cent_connect_if_interesting(void *disc)
 {
-    common->opcode = opcode;
-    common->model = model;
-    common->ctx.net_idx = prov_key.net_idx;
-    common->ctx.app_idx = prov_key.app_idx;
-    common->ctx.addr = node->unicast_addr;
-    common->ctx.send_ttl = MSG_SEND_TTL;
-    common->msg_timeout = MSG_TIMEOUT;
-#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 2, 0)
-    common->msg_role = MSG_ROLE;
+	uint8_t own_addr_type;
+	int rc;
+	ble_addr_t *addr;
+
+	/* Don't do anything if we don't care about this advertiser. */
+#if CONFIG_EXAMPLE_EXTENDED_ADV
+	if (!ext_ble_htp_cent_should_connect((struct ble_gap_ext_disc_desc *)disc))
+	{
+		return;
+	}
+#else
+	if (!ble_htp_cent_should_connect((struct ble_gap_disc_desc *)disc))
+	{
+		return;
+	}
 #endif
+
+#if !(MYNEWT_VAL(BLE_HOST_ALLOW_CONNECT_WITH_SCAN))
+	/* Scanning must be stopped before a connection can be initiated. */
+	rc = ble_gap_disc_cancel();
+	if (rc != 0)
+	{
+		MODLOG_DFLT(DEBUG, "Failed to cancel scan; rc=%d\n", rc);
+		return;
+	}
+#endif
+
+	/* Figure out address to use for connect (no privacy for now) */
+	rc = ble_hs_id_infer_auto(0, &own_addr_type);
+	if (rc != 0)
+	{
+		MODLOG_DFLT(ERROR, "error determining address type; rc=%d\n", rc);
+		return;
+	}
+
+	/* Try to connect the the advertiser.  Allow 30 seconds (30000 ms) for
+	 * timeout.
+	 */
+#if CONFIG_EXAMPLE_EXTENDED_ADV
+	addr = &((struct ble_gap_ext_disc_desc *)disc)->addr;
+#else
+	addr = &((struct ble_gap_disc_desc *)disc)->addr;
+#endif
+	rc = ble_gap_connect(own_addr_type, addr, 30000, NULL,
+								ble_htp_cent_gap_event, NULL);
+	if (rc != 0)
+	{
+		MODLOG_DFLT(ERROR, "Error: Failed to connect to device; addr_type=%d "
+								 "addr=%s; rc=%d\n",
+						addr->type, addr_str(addr->val), rc);
+		return;
+	}
 }
 
-static esp_err_t prov_complete(uint16_t node_index, const esp_ble_mesh_octet16_t uuid,
-                               uint16_t primary_addr, uint8_t element_num, uint16_t net_idx)
+/**
+ * The nimble host executes this callback when a GAP event occurs.  The
+ * application associates a GAP event callback with each connection that is
+ * established.  ble_htp_cent uses the same callback for all connections.
+ *
+ * @param event                 The event being signalled.
+ * @param arg                   Application-specified argument; unused by
+ *                                  ble_htp_cent.
+ *
+ * @return                      0 if the application successfully handled the
+ *                                  event; nonzero on failure.  The semantics
+ *                                  of the return code is specific to the
+ *                                  particular GAP event being signalled.
+ */
+
+static int ble_htp_cent_gap_event(struct ble_gap_event *event, void *arg)
 {
-    esp_ble_mesh_client_common_param_t common = {0};
-    esp_ble_mesh_cfg_client_get_state_t get = {0};
-    esp_ble_mesh_node_t *node = NULL;
-    char name[11] = {'\0'};
-    esp_err_t err = ESP_OK;
+struct ble_gap_conn_desc desc;
+struct ble_hs_adv_fields fields;
+int rc;
 
-    ESP_LOGI(TAG, "node_index %u, primary_addr 0x%04x, element_num %u, net_idx 0x%03x",
-        node_index, primary_addr, element_num, net_idx);
-    ESP_LOG_BUFFER_HEX("uuid", uuid, ESP_BLE_MESH_OCTET16_LEN);
+	switch (event->type)
+	{
+	case BLE_GAP_EVENT_DISC:
+		rc = ble_hs_adv_parse_fields(&fields, event->disc.data,
+											  event->disc.length_data);
+		if (rc != 0)
+		{
+			return 0;
+		}
 
-    server_address = primary_addr;
+		/* An advertisement report was received during GAP discovery. */
+		print_adv_fields(&fields);
 
-    sprintf(name, "%s%02x", "NODE-", node_index);
-    err = esp_ble_mesh_provisioner_set_node_name(node_index, name);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to set node name");
-        return ESP_FAIL;
-    }
+		/* Try to connect to the advertiser if it looks interesting. */
+		ble_htp_cent_connect_if_interesting(&event->disc);
+		return 0;
 
-    node = esp_ble_mesh_provisioner_get_node_with_addr(primary_addr);
-    if (node == NULL) {
-        ESP_LOGE(TAG, "Failed to get node 0x%04x info", primary_addr);
-        return ESP_FAIL;
-    }
+	case BLE_GAP_EVENT_CONNECT:
+		/* A new connection was established or a connection attempt failed. */
+		if (event->connect.status == 0)
+		{
+			/* Connection successfully established. */
+			MODLOG_DFLT(INFO, "Connection established ");
 
-    example_ble_mesh_set_msg_common(&common, node, config_client.model, ESP_BLE_MESH_MODEL_OP_COMPOSITION_DATA_GET);
-    get.comp_data_get.page = COMP_DATA_PAGE_0;
-    err = esp_ble_mesh_config_client_get_state(&common, &get);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to send Config Composition Data Get");
-        return ESP_FAIL;
-    }
+			rc = ble_gap_conn_find(event->connect.conn_handle, &desc);
+			assert(rc == 0);
+			print_conn_desc(&desc);
+			MODLOG_DFLT(INFO, "\n");
 
-    return ESP_OK;
+			/* Remember peer. */
+			rc = peer_add(event->connect.conn_handle);
+			if (rc != 0)
+			{
+				MODLOG_DFLT(ERROR, "Failed to add peer; rc=%d\n", rc);
+				return 0;
+			}
+
+#if CONFIG_EXAMPLE_ENCRYPTION
+			/** Initiate security - It will perform
+			 * Pairing (Exchange keys)
+			 * Bonding (Store keys)
+			 * Encryption (Enable encryption)
+			 * Will invoke event BLE_GAP_EVENT_ENC_CHANGE
+			 **/
+			rc = ble_gap_security_initiate(event->connect.conn_handle);
+			if (rc != 0)
+			{
+				MODLOG_DFLT(INFO, "Security could not be initiated, rc = %d\n", rc);
+				return ble_gap_terminate(event->connect.conn_handle,
+												 BLE_ERR_REM_USER_CONN_TERM);
+			}
+			else
+			{
+				MODLOG_DFLT(INFO, "Connection secured\n");
+			}
+#else
+			/* Perform service discovery */
+			rc = peer_disc_all(event->connect.conn_handle,
+									 ble_htp_cent_on_disc_complete, NULL);
+			if (rc != 0)
+			{
+				MODLOG_DFLT(ERROR, "Failed to discover services; rc=%d\n", rc);
+				return 0;
+			}
+#endif
+		}
+		else
+		{
+			/* Connection attempt failed; resume scanning. */
+			MODLOG_DFLT(ERROR, "Error: Connection failed; status=%d\n",
+							event->connect.status);
+			ble_htp_cent_scan();
+		}
+
+		return 0;
+
+	case BLE_GAP_EVENT_DISCONNECT:
+		/* Connection terminated. */
+		heater_status.blue = false;
+		MODLOG_DFLT(INFO, "disconnect; reason=%d ", event->disconnect.reason);
+		print_conn_desc(&event->disconnect.conn);
+		MODLOG_DFLT(INFO, "\n");
+
+		/* Forget about peer. */
+		peer_delete(event->disconnect.conn.conn_handle);
+
+		/* Resume scanning. */
+		ble_htp_cent_scan();
+		return 0;
+
+	case BLE_GAP_EVENT_DISC_COMPLETE:
+		MODLOG_DFLT(INFO, "discovery complete; reason=%d\n",
+						event->disc_complete.reason);
+		return 0;
+
+	case BLE_GAP_EVENT_ENC_CHANGE:
+		/* Encryption has been enabled or disabled for this connection. */
+		MODLOG_DFLT(INFO, "encryption change event; status=%d ",
+						event->enc_change.status);
+		rc = ble_gap_conn_find(event->enc_change.conn_handle, &desc);
+		assert(rc == 0);
+		print_conn_desc(&desc);
+#if CONFIG_EXAMPLE_ENCRYPTION
+		/*** Go for service discovery after encryption has been successfully enabled ***/
+		rc = peer_disc_all(event->connect.conn_handle,
+								 ble_htp_cent_on_disc_complete, NULL);
+		if (rc != 0)
+		{
+			MODLOG_DFLT(ERROR, "Failed to discover services; rc=%d\n", rc);
+			return 0;
+		}
+#endif
+		return 0;
+
+	case BLE_GAP_EVENT_NOTIFY_RX:
+		/* Peer sent us a notification or indication. */
+		//        MODLOG_DFLT(INFO, "received %s; conn_handle=%d attr_handle=%d "
+		//                    "attr_len=%d\n",
+		//                    event->notify_rx.indication ?
+		//                    "indication" :
+		//                    "notification",
+		//                    event->notify_rx.conn_handle,
+		//                    event->notify_rx.attr_handle,
+		//                    OS_MBUF_PKTLEN(event->notify_rx.om));
+
+		/* Attribute data is contained in event->notify_rx.om. Use
+		 * `os_mbuf_copydata` to copy the data received in notification mbuf */
+
+		os_mbuf_copydata(event->notify_rx.om, 0, 1, &temp_type);
+		os_mbuf_copydata(event->notify_rx.om, 1, 4, &temp);
+		//        ESP_LOGI( tag, "Received remote temperature:%f", temp );
+		heater_status.rem = temp;
+		heater_status.blue = true;
+
+		return 0;
+
+	case BLE_GAP_EVENT_MTU:
+		MODLOG_DFLT(INFO, "mtu update event; conn_handle=%d cid=%d mtu=%d\n",
+						event->mtu.conn_handle,
+						event->mtu.channel_id,
+						event->mtu.value);
+		return 0;
+
+	case BLE_GAP_EVENT_REPEAT_PAIRING:
+		/* We already have a bond with the peer, but it is attempting to
+		 * establish a new secure link.  This app sacrifices security for
+		 * convenience: just throw away the old bond and accept the new link.
+		 */
+
+		/* Delete the old bond. */
+		rc = ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc);
+		assert(rc == 0);
+		ble_store_util_delete_peer(&desc.peer_id_addr);
+
+		/* Return BLE_GAP_REPEAT_PAIRING_RETRY to indicate that the host should
+		 * continue with the pairing operation.
+		 */
+		return BLE_GAP_REPEAT_PAIRING_RETRY;
+
+#if CONFIG_EXAMPLE_EXTENDED_ADV
+	case BLE_GAP_EVENT_EXT_DISC:
+		/* An advertisement report was received during GAP discovery. */
+		ext_print_adv_report(&event->disc);
+
+		ble_htp_cent_connect_if_interesting(&event->disc);
+		return 0;
+#endif
+
+	default:
+		return 0;
+	}
 }
 
-static void recv_unprov_adv_pkt(uint8_t dev_uuid[ESP_BLE_MESH_OCTET16_LEN], uint8_t addr[BD_ADDR_LEN],
-                                esp_ble_mesh_addr_type_t addr_type, uint16_t oob_info,
-                                uint8_t adv_type, esp_ble_mesh_prov_bearer_t bearer)
+static void
+ble_htp_cent_on_reset(int reason)
 {
-    esp_ble_mesh_unprov_dev_add_t add_dev = {0};
-    esp_err_t err = ESP_OK;
-
-    /* Due to the API esp_ble_mesh_provisioner_set_dev_uuid_match, Provisioner will only
-     * use this callback to report the devices, whose device UUID starts with 0xdd & 0xdd,
-     * to the application layer.
-     */
-
-    ESP_LOG_BUFFER_HEX("Device address", addr, BD_ADDR_LEN);
-    ESP_LOGI(TAG, "Address type 0x%02x, adv type 0x%02x", addr_type, adv_type);
-    ESP_LOG_BUFFER_HEX("Device UUID", dev_uuid, ESP_BLE_MESH_OCTET16_LEN);
-    ESP_LOGI(TAG, "oob info 0x%04x, bearer %s", oob_info, (bearer & ESP_BLE_MESH_PROV_ADV) ? "PB-ADV" : "PB-GATT");
-
-    memcpy(add_dev.addr, addr, BD_ADDR_LEN);
-    add_dev.addr_type = (esp_ble_mesh_addr_type_t)addr_type;
-    memcpy(add_dev.uuid, dev_uuid, ESP_BLE_MESH_OCTET16_LEN);
-    add_dev.oob_info = oob_info;
-    add_dev.bearer = (esp_ble_mesh_prov_bearer_t)bearer;
-    /* Note: If unprovisioned device adv packets have not been received, we should not add
-             device with ADD_DEV_START_PROV_NOW_FLAG set. */
-    err = esp_ble_mesh_provisioner_add_unprov_dev(&add_dev,
-            ADD_DEV_RM_AFTER_PROV_FLAG | ADD_DEV_START_PROV_NOW_FLAG | ADD_DEV_FLUSHABLE_DEV_FLAG);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start provisioning device");
-    }
+	MODLOG_DFLT(ERROR, "Resetting state; reason=%d\n", reason);
+	heater_status.blue = false;
 }
 
-static void example_ble_mesh_provisioning_cb(esp_ble_mesh_prov_cb_event_t event,
-                                             esp_ble_mesh_prov_cb_param_t *param)
+static void
+ble_htp_cent_on_sync(void)
 {
-    switch (event) {
-    case ESP_BLE_MESH_PROV_REGISTER_COMP_EVT:
-        ESP_LOGI(TAG, "ESP_BLE_MESH_PROV_REGISTER_COMP_EVT, err_code %d", param->prov_register_comp.err_code);
-        break;
-    case ESP_BLE_MESH_PROVISIONER_PROV_ENABLE_COMP_EVT:
-        ESP_LOGI(TAG, "ESP_BLE_MESH_PROVISIONER_PROV_ENABLE_COMP_EVT, err_code %d", param->provisioner_prov_enable_comp.err_code);
-        break;
-    case ESP_BLE_MESH_PROVISIONER_PROV_DISABLE_COMP_EVT:
-        ESP_LOGI(TAG, "ESP_BLE_MESH_PROVISIONER_PROV_DISABLE_COMP_EVT, err_code %d", param->provisioner_prov_disable_comp.err_code);
-        break;
-    case ESP_BLE_MESH_PROVISIONER_RECV_UNPROV_ADV_PKT_EVT:
-        ESP_LOGI(TAG, "ESP_BLE_MESH_PROVISIONER_RECV_UNPROV_ADV_PKT_EVT");
-        recv_unprov_adv_pkt(param->provisioner_recv_unprov_adv_pkt.dev_uuid, param->provisioner_recv_unprov_adv_pkt.addr,
-                            param->provisioner_recv_unprov_adv_pkt.addr_type, param->provisioner_recv_unprov_adv_pkt.oob_info,
-                            param->provisioner_recv_unprov_adv_pkt.adv_type, param->provisioner_recv_unprov_adv_pkt.bearer);
-        break;
-    case ESP_BLE_MESH_PROVISIONER_PROV_LINK_OPEN_EVT:
-        ESP_LOGI(TAG, "ESP_BLE_MESH_PROVISIONER_PROV_LINK_OPEN_EVT, bearer %s",
-            param->provisioner_prov_link_open.bearer == ESP_BLE_MESH_PROV_ADV ? "PB-ADV" : "PB-GATT");
-        break;
-    case ESP_BLE_MESH_PROVISIONER_PROV_LINK_CLOSE_EVT:
-        ESP_LOGI(TAG, "ESP_BLE_MESH_PROVISIONER_PROV_LINK_CLOSE_EVT, bearer %s, reason 0x%02x",
-            param->provisioner_prov_link_close.bearer == ESP_BLE_MESH_PROV_ADV ? "PB-ADV" : "PB-GATT", param->provisioner_prov_link_close.reason);
-        break;
-    case ESP_BLE_MESH_PROVISIONER_PROV_COMPLETE_EVT:
-        prov_complete(param->provisioner_prov_complete.node_idx, param->provisioner_prov_complete.device_uuid,
-                      param->provisioner_prov_complete.unicast_addr, param->provisioner_prov_complete.element_num,
-                      param->provisioner_prov_complete.netkey_idx);
-        break;
-    case ESP_BLE_MESH_PROVISIONER_ADD_UNPROV_DEV_COMP_EVT:
-        ESP_LOGI(TAG, "ESP_BLE_MESH_PROVISIONER_ADD_UNPROV_DEV_COMP_EVT, err_code %d", param->provisioner_add_unprov_dev_comp.err_code);
-        break;
-    case ESP_BLE_MESH_PROVISIONER_SET_DEV_UUID_MATCH_COMP_EVT:
-        ESP_LOGI(TAG, "ESP_BLE_MESH_PROVISIONER_SET_DEV_UUID_MATCH_COMP_EVT, err_code %d", param->provisioner_set_dev_uuid_match_comp.err_code);
-        break;
-    case ESP_BLE_MESH_PROVISIONER_SET_NODE_NAME_COMP_EVT:
-        ESP_LOGI(TAG, "ESP_BLE_MESH_PROVISIONER_SET_NODE_NAME_COMP_EVT, err_code %d", param->provisioner_set_node_name_comp.err_code);
-        if (param->provisioner_set_node_name_comp.err_code == 0) {
-            const char *name = esp_ble_mesh_provisioner_get_node_name(param->provisioner_set_node_name_comp.node_index);
-            if (name) {
-                ESP_LOGI(TAG, "Node %d name %s", param->provisioner_set_node_name_comp.node_index, name);
-            }
-        }
-        break;
-    case ESP_BLE_MESH_PROVISIONER_ADD_LOCAL_APP_KEY_COMP_EVT:
-        ESP_LOGI(TAG, "ESP_BLE_MESH_PROVISIONER_ADD_LOCAL_APP_KEY_COMP_EVT, err_code %d", param->provisioner_add_app_key_comp.err_code);
-        if (param->provisioner_add_app_key_comp.err_code == 0) {
-            prov_key.app_idx = param->provisioner_add_app_key_comp.app_idx;
-            esp_err_t err = esp_ble_mesh_provisioner_bind_app_key_to_local_model(PROV_OWN_ADDR, prov_key.app_idx,
-                                ESP_BLE_MESH_MODEL_ID_SENSOR_CLI, ESP_BLE_MESH_CID_NVAL);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to bind AppKey to sensor client");
-            }
-        }
-        break;
-    case ESP_BLE_MESH_PROVISIONER_BIND_APP_KEY_TO_MODEL_COMP_EVT:
-        ESP_LOGI(TAG, "ESP_BLE_MESH_PROVISIONER_BIND_APP_KEY_TO_MODEL_COMP_EVT, err_code %d", param->provisioner_bind_app_key_to_model_comp.err_code);
-        break;
-    case ESP_BLE_MESH_PROVISIONER_STORE_NODE_COMP_DATA_COMP_EVT:
-        ESP_LOGI(TAG, "ESP_BLE_MESH_PROVISIONER_STORE_NODE_COMP_DATA_COMP_EVT, err_code %d", param->provisioner_store_node_comp_data_comp.err_code);
-        break;
-    default:
-        break;
-    }
+	int rc;
+
+	/* Make sure we have proper identity address set (public preferred) */
+	rc = ble_hs_util_ensure_addr(0);
+	assert(rc == 0);
+
+	/* Begin scanning for a peripheral to connect to. */
+	ble_htp_cent_scan();
 }
 
-static void example_ble_mesh_parse_node_comp_data(const uint8_t *data, uint16_t length)
+void ble_htp_cent_host_task(void *param)
 {
-    uint16_t cid, pid, vid, crpl, feat;
-    uint16_t loc, model_id, company_id;
-    uint8_t nums, numv;
-    uint16_t offset;
-    int i;
+	ESP_LOGI(tag, "BLE Host Task Started");
+	/* This function will return only when nimble_port_stop() is executed */
+	nimble_port_run();
 
-    cid = COMP_DATA_2_OCTET(data, 0);
-    pid = COMP_DATA_2_OCTET(data, 2);
-    vid = COMP_DATA_2_OCTET(data, 4);
-    crpl = COMP_DATA_2_OCTET(data, 6);
-    feat = COMP_DATA_2_OCTET(data, 8);
-    offset = 10;
-
-    ESP_LOGI(TAG, "********************** Composition Data Start **********************");
-    ESP_LOGI(TAG, "* CID 0x%04x, PID 0x%04x, VID 0x%04x, CRPL 0x%04x, Features 0x%04x *", cid, pid, vid, crpl, feat);
-    for (; offset < length; ) {
-        loc = COMP_DATA_2_OCTET(data, offset);
-        nums = COMP_DATA_1_OCTET(data, offset + 2);
-        numv = COMP_DATA_1_OCTET(data, offset + 3);
-        offset += 4;
-        ESP_LOGI(TAG, "* Loc 0x%04x, NumS 0x%02x, NumV 0x%02x *", loc, nums, numv);
-        for (i = 0; i < nums; i++) {
-            model_id = COMP_DATA_2_OCTET(data, offset);
-            ESP_LOGI(TAG, "* SIG Model ID 0x%04x *", model_id);
-            offset += 2;
-        }
-        for (i = 0; i < numv; i++) {
-            company_id = COMP_DATA_2_OCTET(data, offset);
-            model_id = COMP_DATA_2_OCTET(data, offset + 2);
-            ESP_LOGI(TAG, "* Vendor Model ID 0x%04x, Company ID 0x%04x *", model_id, company_id);
-            offset += 4;
-        }
-    }
-    ESP_LOGI(TAG, "*********************** Composition Data End ***********************");
+	nimble_port_freertos_deinit();
 }
 
-static void example_ble_mesh_config_client_cb(esp_ble_mesh_cfg_client_cb_event_t event,
-                                              esp_ble_mesh_cfg_client_cb_param_t *param)
+esp_err_t bluetooth_start(void)
 {
-    esp_ble_mesh_client_common_param_t common = {0};
-    esp_ble_mesh_cfg_client_set_state_t set = {0};
-    static uint16_t wait_model_id, wait_cid;
-    esp_ble_mesh_node_t *node = NULL;
-    esp_err_t err = ESP_OK;
+	int rc;
+	esp_err_t ret;
 
-    ESP_LOGI(TAG, "Config client, event %u, addr 0x%04x, opcode 0x%04" PRIx32,
-        event, param->params->ctx.addr, param->params->opcode);
+	heater_status.blue = false;
 
-    if (param->error_code) {
-        ESP_LOGE(TAG, "Send config client message failed (err %d)", param->error_code);
-        return;
-    }
+	ret = nimble_port_init();
+	if (ret != ESP_OK)
+	{
+		ESP_LOGE(tag, "Failed to init nimble %d ", ret);
+		return (ret);
+	}
 
-    node = esp_ble_mesh_provisioner_get_node_with_addr(param->params->ctx.addr);
-    if (!node) {
-        ESP_LOGE(TAG, "Node 0x%04x not exists", param->params->ctx.addr);
-        return;
-    }
+	/* Configure the host. */
+	ble_hs_cfg.reset_cb = ble_htp_cent_on_reset;
+	ble_hs_cfg.sync_cb = ble_htp_cent_on_sync;
+	ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
 
-    switch (event) {
-    case ESP_BLE_MESH_CFG_CLIENT_GET_STATE_EVT:
-        if (param->params->opcode == ESP_BLE_MESH_MODEL_OP_COMPOSITION_DATA_GET) {
-            ESP_LOG_BUFFER_HEX("Composition data", param->status_cb.comp_data_status.composition_data->data,
-                param->status_cb.comp_data_status.composition_data->len);
-            example_ble_mesh_parse_node_comp_data(param->status_cb.comp_data_status.composition_data->data,
-                param->status_cb.comp_data_status.composition_data->len);
-            err = esp_ble_mesh_provisioner_store_node_comp_data(param->params->ctx.addr,
-                param->status_cb.comp_data_status.composition_data->data,
-                param->status_cb.comp_data_status.composition_data->len);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to store node composition data");
-                break;
-            }
+	/* Initialize data structures to track connected peers. */
+	rc = peer_init(MYNEWT_VAL(BLE_MAX_CONNECTIONS), 64, 64, 64);
+	assert(rc == 0);
 
-            example_ble_mesh_set_msg_common(&common, node, config_client.model, ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD);
-            set.app_key_add.net_idx = prov_key.net_idx;
-            set.app_key_add.app_idx = prov_key.app_idx;
-            memcpy(set.app_key_add.app_key, prov_key.app_key, ESP_BLE_MESH_OCTET16_LEN);
-            err = esp_ble_mesh_config_client_set_state(&common, &set);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to send Config AppKey Add");
-            }
-        }
-        break;
-    case ESP_BLE_MESH_CFG_CLIENT_SET_STATE_EVT:
-        if (param->params->opcode == ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD) {
-            example_ble_mesh_set_msg_common(&common, node, config_client.model, ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND);
-            set.model_app_bind.element_addr = node->unicast_addr;
-            set.model_app_bind.model_app_idx = prov_key.app_idx;
-            set.model_app_bind.model_id = ESP_BLE_MESH_MODEL_ID_SENSOR_SRV;
-            set.model_app_bind.company_id = ESP_BLE_MESH_CID_NVAL;
-            err = esp_ble_mesh_config_client_set_state(&common, &set);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to send Config Model App Bind");
-                return;
-            }
-            wait_model_id = ESP_BLE_MESH_MODEL_ID_SENSOR_SRV;
-            wait_cid = ESP_BLE_MESH_CID_NVAL;
-        } else if (param->params->opcode == ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND) {
-            if (param->status_cb.model_app_status.model_id == ESP_BLE_MESH_MODEL_ID_SENSOR_SRV &&
-                param->status_cb.model_app_status.company_id == ESP_BLE_MESH_CID_NVAL) {
-                example_ble_mesh_set_msg_common(&common, node, config_client.model, ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND);
-                set.model_app_bind.element_addr = node->unicast_addr;
-                set.model_app_bind.model_app_idx = prov_key.app_idx;
-                set.model_app_bind.model_id = ESP_BLE_MESH_MODEL_ID_SENSOR_SETUP_SRV;
-                set.model_app_bind.company_id = ESP_BLE_MESH_CID_NVAL;
-                err = esp_ble_mesh_config_client_set_state(&common, &set);
-                if (err) {
-                    ESP_LOGE(TAG, "Failed to send Config Model App Bind");
-                    return;
-                }
-                wait_model_id = ESP_BLE_MESH_MODEL_ID_SENSOR_SETUP_SRV;
-                wait_cid = ESP_BLE_MESH_CID_NVAL;
-            } else if (param->status_cb.model_app_status.model_id == ESP_BLE_MESH_MODEL_ID_SENSOR_SETUP_SRV &&
-                param->status_cb.model_app_status.company_id == ESP_BLE_MESH_CID_NVAL) {
-                ESP_LOGW(TAG, "Provision and config successfully");
-            }
-        }
-        break;
-    case ESP_BLE_MESH_CFG_CLIENT_PUBLISH_EVT:
-        if (param->params->opcode == ESP_BLE_MESH_MODEL_OP_COMPOSITION_DATA_STATUS) {
-            ESP_LOG_BUFFER_HEX("Composition data", param->status_cb.comp_data_status.composition_data->data,
-                param->status_cb.comp_data_status.composition_data->len);
-        }
-        break;
-    case ESP_BLE_MESH_CFG_CLIENT_TIMEOUT_EVT:
-        switch (param->params->opcode) {
-        case ESP_BLE_MESH_MODEL_OP_COMPOSITION_DATA_GET: {
-            esp_ble_mesh_cfg_client_get_state_t get = {0};
-            example_ble_mesh_set_msg_common(&common, node, config_client.model, ESP_BLE_MESH_MODEL_OP_COMPOSITION_DATA_GET);
-            get.comp_data_get.page = COMP_DATA_PAGE_0;
-            err = esp_ble_mesh_config_client_get_state(&common, &get);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to send Config Composition Data Get");
-            }
-            break;
-        }
-        case ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD:
-            example_ble_mesh_set_msg_common(&common, node, config_client.model, ESP_BLE_MESH_MODEL_OP_APP_KEY_ADD);
-            set.app_key_add.net_idx = prov_key.net_idx;
-            set.app_key_add.app_idx = prov_key.app_idx;
-            memcpy(set.app_key_add.app_key, prov_key.app_key, ESP_BLE_MESH_OCTET16_LEN);
-            err = esp_ble_mesh_config_client_set_state(&common, &set);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to send Config AppKey Add");
-            }
-            break;
-        case ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND:
-            example_ble_mesh_set_msg_common(&common, node, config_client.model, ESP_BLE_MESH_MODEL_OP_MODEL_APP_BIND);
-            set.model_app_bind.element_addr = node->unicast_addr;
-            set.model_app_bind.model_app_idx = prov_key.app_idx;
-            set.model_app_bind.model_id = wait_model_id;
-            set.model_app_bind.company_id = wait_cid;
-            err = esp_ble_mesh_config_client_set_state(&common, &set);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to send Config Model App Bind");
-            }
-            break;
-        default:
-            break;
-        }
-        break;
-    default:
-        ESP_LOGE(TAG, "Invalid config client event %u", event);
-        break;
-    }
-}
+	/* Set the default device name. */
+	rc = ble_svc_gap_device_name_set("nimble-htp-cent");
+	assert(rc == 0);
 
-void example_ble_mesh_send_sensor_message(uint32_t opcode)
-{
-    esp_ble_mesh_sensor_client_get_state_t get = {0};
-    esp_ble_mesh_client_common_param_t common = {0};
-    esp_ble_mesh_node_t *node = NULL;
-    esp_err_t err = ESP_OK;
+	/* XXX Need to have template for store */
+	ble_store_config_init();
 
-    node = esp_ble_mesh_provisioner_get_node_with_addr(server_address);
-    if (node == NULL) {
-        ESP_LOGE(TAG, "Node 0x%04x not exists", server_address);
-        return;
-    }
-
-    example_ble_mesh_set_msg_common(&common, node, sensor_client.model, opcode);
-    switch (opcode) {
-    case ESP_BLE_MESH_MODEL_OP_SENSOR_CADENCE_GET:
-        get.cadence_get.property_id = sensor_prop_id;
-        break;
-    case ESP_BLE_MESH_MODEL_OP_SENSOR_SETTINGS_GET:
-        get.settings_get.sensor_property_id = sensor_prop_id;
-        break;
-    case ESP_BLE_MESH_MODEL_OP_SENSOR_SERIES_GET:
-        get.series_get.property_id = sensor_prop_id;
-        break;
-    default:
-        break;
-    }
-
-    err = esp_ble_mesh_sensor_client_get_state(&common, &get);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to send sensor message 0x%04" PRIx32, opcode);
-    }
-}
-
-static void example_ble_mesh_sensor_timeout(uint32_t opcode)
-{
-    switch (opcode) {
-    case ESP_BLE_MESH_MODEL_OP_SENSOR_DESCRIPTOR_GET:
-        ESP_LOGW(TAG, "Sensor Descriptor Get timeout, opcode 0x%04" PRIx32, opcode);
-        break;
-    case ESP_BLE_MESH_MODEL_OP_SENSOR_CADENCE_GET:
-        ESP_LOGW(TAG, "Sensor Cadence Get timeout, opcode 0x%04" PRIx32, opcode);
-        break;
-    case ESP_BLE_MESH_MODEL_OP_SENSOR_CADENCE_SET:
-        ESP_LOGW(TAG, "Sensor Cadence Set timeout, opcode 0x%04" PRIx32, opcode);
-        break;
-    case ESP_BLE_MESH_MODEL_OP_SENSOR_SETTINGS_GET:
-        ESP_LOGW(TAG, "Sensor Settings Get timeout, opcode 0x%04" PRIx32, opcode);
-        break;
-    case ESP_BLE_MESH_MODEL_OP_SENSOR_SETTING_GET:
-        ESP_LOGW(TAG, "Sensor Setting Get timeout, opcode 0x%04" PRIx32, opcode);
-        break;
-    case ESP_BLE_MESH_MODEL_OP_SENSOR_SETTING_SET:
-        ESP_LOGW(TAG, "Sensor Setting Set timeout, opcode 0x%04" PRIx32, opcode);
-        break;
-    case ESP_BLE_MESH_MODEL_OP_SENSOR_GET:
-        ESP_LOGW(TAG, "Sensor Get timeout, 0x%04" PRIx32, opcode);
-        break;
-    case ESP_BLE_MESH_MODEL_OP_SENSOR_COLUMN_GET:
-        ESP_LOGW(TAG, "Sensor Column Get timeout, opcode 0x%04" PRIx32, opcode);
-        break;
-    case ESP_BLE_MESH_MODEL_OP_SENSOR_SERIES_GET:
-        ESP_LOGW(TAG, "Sensor Series Get timeout, opcode 0x%04" PRIx32, opcode);
-        break;
-    default:
-        ESP_LOGE(TAG, "Unknown Sensor Get/Set opcode 0x%04" PRIx32, opcode);
-        return;
-    }
-
-    example_ble_mesh_send_sensor_message(opcode);
-}
-
-static void example_ble_mesh_sensor_client_cb(esp_ble_mesh_sensor_client_cb_event_t event,
-                                              esp_ble_mesh_sensor_client_cb_param_t *param)
-{
-    esp_ble_mesh_node_t *node = NULL;
-
-    ESP_LOGI(TAG, "Sensor client, event %u, addr 0x%04x", event, param->params->ctx.addr);
-
-    if (param->error_code) {
-        ESP_LOGE(TAG, "Send sensor client message failed (err %d)", param->error_code);
-        return;
-    }
-
-    node = esp_ble_mesh_provisioner_get_node_with_addr(param->params->ctx.addr);
-    if (!node) {
-        ESP_LOGE(TAG, "Node 0x%04x not exists", param->params->ctx.addr);
-        return;
-    }
-
-    switch (event) {
-    case ESP_BLE_MESH_SENSOR_CLIENT_GET_STATE_EVT:
-        switch (param->params->opcode) {
-        case ESP_BLE_MESH_MODEL_OP_SENSOR_DESCRIPTOR_GET:
-            ESP_LOGI(TAG, "Sensor Descriptor Status, opcode 0x%04" PRIx32, param->params->ctx.recv_op);
-            if (param->status_cb.descriptor_status.descriptor->len != ESP_BLE_MESH_SENSOR_SETTING_PROPERTY_ID_LEN &&
-                param->status_cb.descriptor_status.descriptor->len % ESP_BLE_MESH_SENSOR_DESCRIPTOR_LEN) {
-                ESP_LOGE(TAG, "Invalid Sensor Descriptor Status length %d", param->status_cb.descriptor_status.descriptor->len);
-                return;
-            }
-            if (param->status_cb.descriptor_status.descriptor->len) {
-                ESP_LOG_BUFFER_HEX("Sensor Descriptor", param->status_cb.descriptor_status.descriptor->data,
-                    param->status_cb.descriptor_status.descriptor->len);
-                /* If running with sensor server example, sensor client can get two Sensor Property IDs.
-                 * Currently we use the first Sensor Property ID for the following demonstration.
-                 */
-                sensor_prop_id = param->status_cb.descriptor_status.descriptor->data[1] << 8 |
-                                 param->status_cb.descriptor_status.descriptor->data[0];
-            }
-            break;
-        case ESP_BLE_MESH_MODEL_OP_SENSOR_CADENCE_GET:
-            ESP_LOGI(TAG, "Sensor Cadence Status, opcode 0x%04" PRIx32 ", Sensor Property ID 0x%04x",
-                param->params->ctx.recv_op, param->status_cb.cadence_status.property_id);
-            ESP_LOG_BUFFER_HEX("Sensor Cadence", param->status_cb.cadence_status.sensor_cadence_value->data,
-                param->status_cb.cadence_status.sensor_cadence_value->len);
-            break;
-        case ESP_BLE_MESH_MODEL_OP_SENSOR_SETTINGS_GET:
-            ESP_LOGI(TAG, "Sensor Settings Status, opcode 0x%04" PRIx32 ", Sensor Property ID 0x%04x",
-                param->params->ctx.recv_op, param->status_cb.settings_status.sensor_property_id);
-            ESP_LOG_BUFFER_HEX("Sensor Settings", param->status_cb.settings_status.sensor_setting_property_ids->data,
-                param->status_cb.settings_status.sensor_setting_property_ids->len);
-            break;
-        case ESP_BLE_MESH_MODEL_OP_SENSOR_SETTING_GET:
-            ESP_LOGI(TAG, "Sensor Setting Status, opcode 0x%04" PRIx32 ", Sensor Property ID 0x%04x, Sensor Setting Property ID 0x%04x",
-                param->params->ctx.recv_op, param->status_cb.setting_status.sensor_property_id,
-                param->status_cb.setting_status.sensor_setting_property_id);
-            if (param->status_cb.setting_status.op_en) {
-                ESP_LOGI(TAG, "Sensor Setting Access 0x%02x", param->status_cb.setting_status.sensor_setting_access);
-                ESP_LOG_BUFFER_HEX("Sensor Setting Raw", param->status_cb.setting_status.sensor_setting_raw->data,
-                    param->status_cb.setting_status.sensor_setting_raw->len);
-            }
-            break;
-        case ESP_BLE_MESH_MODEL_OP_SENSOR_GET:
-            ESP_LOGI(TAG, "Sensor Status, opcode 0x%04" PRIx32, param->params->ctx.recv_op);
-            if (param->status_cb.sensor_status.marshalled_sensor_data->len) {
-                ESP_LOG_BUFFER_HEX("Sensor Data", param->status_cb.sensor_status.marshalled_sensor_data->data,
-                    param->status_cb.sensor_status.marshalled_sensor_data->len);
-                uint8_t *data = param->status_cb.sensor_status.marshalled_sensor_data->data;
-                uint16_t length = 0;
-                for (; length < param->status_cb.sensor_status.marshalled_sensor_data->len; ) {
-                    uint8_t fmt = ESP_BLE_MESH_GET_SENSOR_DATA_FORMAT(data);
-                    uint8_t data_len = ESP_BLE_MESH_GET_SENSOR_DATA_LENGTH(data, fmt);
-                    uint16_t prop_id = ESP_BLE_MESH_GET_SENSOR_DATA_PROPERTY_ID(data, fmt);
-                    uint8_t mpid_len = (fmt == ESP_BLE_MESH_SENSOR_DATA_FORMAT_A ?
-                                        ESP_BLE_MESH_SENSOR_DATA_FORMAT_A_MPID_LEN : ESP_BLE_MESH_SENSOR_DATA_FORMAT_B_MPID_LEN);
-                    ESP_LOGI(TAG, "Format %s, length 0x%02x, Sensor Property ID 0x%04x",
-                        fmt == ESP_BLE_MESH_SENSOR_DATA_FORMAT_A ? "A" : "B", data_len, prop_id);
-                    if (data_len != ESP_BLE_MESH_SENSOR_DATA_ZERO_LEN) {
-                        ESP_LOG_BUFFER_HEX("Sensor Data", data + mpid_len, data_len + 1);
-                        length += mpid_len + data_len + 1;
-                        data += mpid_len + data_len + 1;
-                    } else {
-                        length += mpid_len;
-                        data += mpid_len;
-                    }
-                }
-            }
-            break;
-        case ESP_BLE_MESH_MODEL_OP_SENSOR_COLUMN_GET:
-            ESP_LOGI(TAG, "Sensor Column Status, opcode 0x%04" PRIx32 ", Sensor Property ID 0x%04x",
-                param->params->ctx.recv_op, param->status_cb.column_status.property_id);
-            ESP_LOG_BUFFER_HEX("Sensor Column", param->status_cb.column_status.sensor_column_value->data,
-                param->status_cb.column_status.sensor_column_value->len);
-            break;
-        case ESP_BLE_MESH_MODEL_OP_SENSOR_SERIES_GET:
-            ESP_LOGI(TAG, "Sensor Series Status, opcode 0x%04" PRIx32 ", Sensor Property ID 0x%04x",
-                param->params->ctx.recv_op, param->status_cb.series_status.property_id);
-            ESP_LOG_BUFFER_HEX("Sensor Series", param->status_cb.series_status.sensor_series_value->data,
-                param->status_cb.series_status.sensor_series_value->len);
-            break;
-        default:
-            ESP_LOGE(TAG, "Unknown Sensor Get opcode 0x%04" PRIx32, param->params->ctx.recv_op);
-            break;
-        }
-        break;
-    case ESP_BLE_MESH_SENSOR_CLIENT_SET_STATE_EVT:
-        switch (param->params->opcode) {
-        case ESP_BLE_MESH_MODEL_OP_SENSOR_CADENCE_SET:
-            ESP_LOGI(TAG, "Sensor Cadence Status, opcode 0x%04" PRIx32 ", Sensor Property ID 0x%04x",
-                param->params->ctx.recv_op, param->status_cb.cadence_status.property_id);
-            ESP_LOG_BUFFER_HEX("Sensor Cadence", param->status_cb.cadence_status.sensor_cadence_value->data,
-                param->status_cb.cadence_status.sensor_cadence_value->len);
-            break;
-        case ESP_BLE_MESH_MODEL_OP_SENSOR_SETTING_SET:
-            ESP_LOGI(TAG, "Sensor Setting Status, opcode 0x%04" PRIx32 ", Sensor Property ID 0x%04x, Sensor Setting Property ID 0x%04x",
-                param->params->ctx.recv_op, param->status_cb.setting_status.sensor_property_id,
-                param->status_cb.setting_status.sensor_setting_property_id);
-            if (param->status_cb.setting_status.op_en) {
-                ESP_LOGI(TAG, "Sensor Setting Access 0x%02x", param->status_cb.setting_status.sensor_setting_access);
-                ESP_LOG_BUFFER_HEX("Sensor Setting Raw", param->status_cb.setting_status.sensor_setting_raw->data,
-                    param->status_cb.setting_status.sensor_setting_raw->len);
-            }
-            break;
-        default:
-            ESP_LOGE(TAG, "Unknown Sensor Set opcode 0x%04" PRIx32, param->params->ctx.recv_op);
-            break;
-        }
-        break;
-    case ESP_BLE_MESH_SENSOR_CLIENT_PUBLISH_EVT:
-        break;
-    case ESP_BLE_MESH_SENSOR_CLIENT_TIMEOUT_EVT:
-        example_ble_mesh_sensor_timeout(param->params->opcode);
-    default:
-        break;
-    }
-}
-
-static esp_err_t ble_mesh_init(void)
-{
-    uint8_t match[2] = { 0x32, 0x10 };
-    esp_err_t err = ESP_OK;
-
-    prov_key.net_idx = ESP_BLE_MESH_KEY_PRIMARY;
-    prov_key.app_idx = APP_KEY_IDX;
-    memset(prov_key.app_key, APP_KEY_OCTET, sizeof(prov_key.app_key));
-
-    esp_ble_mesh_register_prov_callback(example_ble_mesh_provisioning_cb);
-    esp_ble_mesh_register_config_client_callback(example_ble_mesh_config_client_cb);
-    esp_ble_mesh_register_sensor_client_callback(example_ble_mesh_sensor_client_cb);
-
-    err = esp_ble_mesh_init(&provision, &composition);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize mesh stack");
-        return err;
-    }
-
-    err = esp_ble_mesh_provisioner_set_dev_uuid_match(match, sizeof(match), 0x0, false);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to set matching device uuid");
-        return err;
-    }
-
-    err = esp_ble_mesh_provisioner_prov_enable((esp_ble_mesh_prov_bearer_t)(ESP_BLE_MESH_PROV_ADV | ESP_BLE_MESH_PROV_GATT));
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to enable mesh provisioner");
-        return err;
-    }
-
-    err = esp_ble_mesh_provisioner_add_local_app_key(prov_key.app_key, prov_key.net_idx, prov_key.app_idx);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to add local AppKey");
-        return err;
-    }
-
-    ESP_LOGI(TAG, "BLE Mesh sensor client initialized");
-
-    return ESP_OK;
-}
-
-void bluetooth_start(void)
-{
-    esp_err_t err = ESP_OK;
-
-    ESP_LOGI(TAG, "Initializing...");
-
-    err = bluetooth_init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp32_bluetooth_init failed (err %d)", err);
-        return;
-    }
-
-    ble_mesh_get_dev_uuid(dev_uuid);
-
-    /* Initialize the Bluetooth Mesh Subsystem */
-    err = ble_mesh_init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Bluetooth mesh init failed (err %d)", err);
-    }
+	nimble_port_freertos_init(ble_htp_cent_host_task);
+	return (ESP_OK);
 }
