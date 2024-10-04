@@ -346,16 +346,16 @@ void PzemSetCRC( uint8_t *buf, uint16_t len )
  */
 bool PzemCheckCRC( const uint8_t *buf, uint16_t len )
 {
-    static const char *TAG = "[CHECKCRC]";
-    uint64_t start = esp_timer_get_time();
+//  static const char *TAG = "[CHECKCRC]";
+//  uint64_t start = esp_timer_get_time();
 
     if ( len <= 2 ) { /* Sanity check */
         return false;
     }
     uint16_t crc = crc16( buf, len - 2 ); /* Compute CRC of data */
 
-    uint64_t stop = esp_timer_get_time();
-    ESP_LOGV(TAG, "Routine crc16() took %llu microseconds", (stop - start));
+//  uint64_t stop = esp_timer_get_time();
+//  ESP_LOGV(TAG, "Routine crc16() took %llu microseconds", (stop - start));
 
     return ( ( uint16_t ) buf[ len - 2 ] | ( uint16_t ) buf[ len - 1 ] << 8 ) == crc;
 }
