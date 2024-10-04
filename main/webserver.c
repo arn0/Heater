@@ -24,7 +24,7 @@
 #include "lvgl_ui.h"
 #include "json.h"
 
-#define HEATER_WEB_STEP 0.5
+#define HEATER_WEB_STEP 0.1
 
 static const char *TAG = "webserver";
 int led_state = 0;
