@@ -13,7 +13,7 @@
 #define CONTROL_TASK_PRIORITY		10
 #define CONTROL_TASK_DELAY_MS		500
 #define MONITOR_TASK_PRIORITY		8
-#define MONITOR_TASK_DELAY_MS		300				// DS18B20 are slow (12 bit conversion takes 750 ms), but delay (calculated against resolution) is included in component (esperessif_ds18b20) code, so no need.
+#define MONITOR_TASK_DELAY_MS		1000				// DS18B20 are slow (12 bit conversion takes 750 ms), delay (calculated against resolution) is included in component (esperessif_ds18b20) code, so need some time here.
 #define WS_UPDATE_TASK_PRIORITY	6
 #define WS_UPDATE_TASK_DELAY_MS	300
 #define LVGL_TASK_PRIORITY			5
