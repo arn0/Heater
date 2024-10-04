@@ -28,6 +28,7 @@ namespace MyJsonNamespace {
       this->doc["one_pwr"] = heater_status.one_pwr;
       this->doc["two_pwr"] = heater_status.two_pwr;
       this->doc["safe"] = heater_status.safe;
+      this->doc["blue"] = heater_status.blue;
       serializeJson(doc, this->json_string);
       return(this->json_string);
    }
