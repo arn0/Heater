@@ -229,6 +229,7 @@ bool PzemSendCmd8( pzem_setup_t *pzSetup, uint8_t cmd, uint16_t regAddr, uint16_
     return true;
 }
 
+uint64_t last_update = 0;
 
 /**
  * @brief Retreive all measurements, leave 200ms between intervals
@@ -239,9 +240,11 @@ bool PzemSendCmd8( pzem_setup_t *pzSetup, uint8_t cmd, uint16_t regAddr, uint16_
 bool PzemGetValues( pzem_setup_t *pzSetup, _current_values_t *pmonValues )
 {
     static const char *LOG_TAG = "PZ_GETVALUES";
-    if ( ( unsigned long ) ( millis() - _lastRead ) > UPDATE_TIME ) {
-        _lastRead = millis();
-    } else {
+
+    uint64_t now = esp_timer_get_time();
+
+    if( ( now - last_update ) <=  UPDATE_TIME * 1000 ){
+        ESP_LOGE(LOG_TAG, "Update time not expired !!");
         return true;
     }
 
@@ -259,13 +262,15 @@ bool PzemGetValues( pzem_setup_t *pzSetup, _current_values_t *pmonValues )
 
     /* Read response from the sensor, if everything goes well we retreived 25 Bytes */
     if ( PzemReceive( pzSetup, respbuff, RESP_BUF_SIZE ) != RESP_BUF_SIZE ) { /* Something went wrong */
+        last_update = now + UPDATE_TIME * 1000 * 10;
         ESP_LOGD(LOG_TAG, "Wrong response size !!");
         return false;
     }
 
     if ( !PzemCheckCRC( respbuff, RESP_BUF_SIZE ) ) {
         ESP_LOGE( LOG_TAG, "Retreived buffer CRC check failed" );
-                return false;
+        last_update = now + UPDATE_TIME * 1000 * 10;
+        return false;
     } else {
         ESP_LOGV( LOG_TAG, "CRC check OK for GetValues()" );
     }
@@ -312,7 +317,8 @@ bool PzemGetValues( pzem_setup_t *pzSetup, _current_values_t *pmonValues )
     */
     pmonValues->reactive_power = pmonValues->apparent_power * sinf(pmonValues->fi);         // replacd sin() with sinf() as we mainly use floats instead of double
 
-        return true;
+    last_update = now;
+    return true;
 }
 
 /**
