@@ -184,7 +184,7 @@ void send_sensor_update(){
 						if (websock_clients[i].handle != NULL)
 						{
 							json_string = json_update();
-							ESP_LOGI( TAG, "json_str: %s, length: %d", json_string, strlen(json_string) );
+							ESP_LOGD( TAG, "json_str: %s, length: %d", json_string, strlen(json_string) );
 							send_sensor_update_frame(json_string, i);
 						}
 					}

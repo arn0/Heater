@@ -31,7 +31,7 @@ void control_task(){
 		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );
 
 		if( xWasDelayed == pdFALSE ){
-			ESP_LOGE( TAG, "Task was not delayed" );
+			ESP_LOGW( TAG, "Task was not delayed" );
 		}
 
 		heater_status.safe = true;
