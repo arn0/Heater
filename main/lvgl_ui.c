@@ -36,8 +36,10 @@ int16_t i, data_points = 0;
 
 static void analytics_create(lv_obj_t * parent);
 static void chart_event_cb(lv_event_t * e);
-void stats_start();
 
+#ifdef ENABLE_LOG
+void stats_start();
+#endif
 
 static lv_obj_t * obj_t_1;
 static lv_obj_t * obj_t_2;
@@ -178,7 +180,11 @@ void example_lvgl_demo_ui(lv_disp_t *disp)
 	lvg_ui_started = true;
 
 	vTaskDelay(pdMS_TO_TICKS(5000));
+	
+#ifdef ENABLE_LOG
 	stats_start();
+#endif
+
 	lv_obj_invalidate(lv_scr_act());
 }
 
@@ -275,6 +281,8 @@ void find_min_max()
 		}
 	}
 }
+
+#ifdef ENABLE_LOG
 
 void stats_task() {
 	TickType_t xPreviousWakeTime;
@@ -464,3 +472,5 @@ void stats_start()
 //	stats_read();
 //	xTaskCreate( stats_task, "stats", 4096, NULL, STATS_TASK_PRIORITY, NULL );
 }
+
+#endif // ENABLE_LOG

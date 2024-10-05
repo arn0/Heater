@@ -1,7 +1,15 @@
 menu "Example Configuration"
 
+    config EXAMPLE_ENABLE_LCD
+        bool
+        prompt "Enable LCD"
+        default n
+        help
+            Use this option to enable LCD display.
+
     choice EXAMPLE_LCD_CONTROLLER
         prompt "LCD controller model"
+        depends on EXAMPLE_ENABLE_LCD
         default EXAMPLE_LCD_CONTROLLER_ILI9341
         help
             Select LCD controller model
@@ -15,6 +23,7 @@ menu "Example Configuration"
 
     config EXAMPLE_LCD_TOUCH_ENABLED
         bool "Enable LCD touch"
+        depends on EXAMPLE_ENABLE_LCD
         default n
         help
             Enable this option if you wish to use display touch. You can select from touch controllers.
@@ -61,5 +70,14 @@ menu "Example Configuration"
             Use this option to enable extended advertising in the example.
             If this option is disabled, ensure config BT_NIMBLE_EXT_ADV is
             also disabled from Nimble stack menuconfig
+
+    config EXAMPLE_ENABLE_STATUS_LOG
+        bool
+        prompt "Enable status logging"
+        default n
+        help
+            Use this option to enable collecting "heater status" snapshots every minute
+            and write 24 hours of data to the file "log.bin" on the SPIFFS data partition.
+
 
 endmenu

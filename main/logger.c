@@ -16,6 +16,8 @@
 #include "heater.h"
 #include "logger.h"
 
+#ifdef ENABLE_LOG
+
 static const char *TAG = "logger";
 
 static bool log_full = false;
@@ -151,3 +153,4 @@ int16_t log_fill(){
 		return((int16_t) (heater_status.fnt * 100));
 	
 }
+#endif

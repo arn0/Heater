@@ -47,8 +47,11 @@ pzem_setup_t pzConf =
 };
 _current_values_t pzValues;            		  /* Measured values */
 
-time_t log_saved_time, log_update_time, now;
-time_t next_heap_time;
+#ifdef ENABLE_LOG
+time_t log_saved_time, log_update_time;
+#endif
+
+time_t now, next_heap_time;
 
 void monitor_task(){
 	TickType_t xPreviousWakeTime;
@@ -65,12 +68,19 @@ void monitor_task(){
 			ESP_LOGW(TAG, "Task was not delayed");
 		}
 
-      if(PzemGetValues( &pzConf, &pzValues )){
+      if( PzemGetValues( &pzConf, &pzValues )) {
 			heater_status.voltage = pzValues.voltage;
 			heater_status.current = pzValues.current/5;
 			heater_status.power = pzValues.power/5;
 			heater_status.energy = pzValues.energy/5;
 			heater_status.pf = pzValues.pf;
+		}
+		else {
+			heater_status.voltage = 0;
+			heater_status.current = 0;
+			heater_status.power = 0;
+			heater_status.energy = 0;
+			heater_status.pf = 0;
 		}
 
 		switch( step++ ) {
@@ -139,14 +149,16 @@ void monitor_task(){
 
 			case 9:
 				time(&now);
+#ifdef ENABLE_LOG
 				if(now > log_update_time + 60){
 					log_add();
 					log_update_time = now;
 				}
 				if(now > log_saved_time + 60*10){
-					//log_save();
+					log_save();
 					log_saved_time = now;
 				}
+#endif
 				if(now > next_heap_time){
 					next_heap_time = now + 60*10;
 					heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);		// Log heap memory every 10 minutes
@@ -239,10 +251,12 @@ bool start_monitor_task(){
 	PzReadAddress(&pzConf);
 	ESP_LOGI(TAG, "pzem adress: %d", PzReadAddress(&pzConf));
 
+#ifdef ENABLE_LOG
 	time(&log_saved_time);
 	log_update_time = log_saved_time;
-	//next_heap_time = log_saved_time;
-	//log_read();
+	next_heap_time = log_saved_time;
+	log_read();
+#endif
 
 	xTaskCreate( monitor_task, "monitor", 4096/2+512, NULL, MONITOR_TASK_PRIORITY, NULL );
 

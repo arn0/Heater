@@ -22,9 +22,12 @@ void time_sync_notification_cb(struct timeval *tv)
 {
 	sntp_valid = true;
 	ESP_LOGI(TAG, "Notification of a time synchronization event");
+
+	#ifdef ENABLE_LOG
 	if(stats_read_postponed == true){
 		stats_read();
 	}
+	#endif
 }
 
 void timezone_set()

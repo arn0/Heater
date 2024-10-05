@@ -7,9 +7,12 @@
 
 #include "heater.h"
 #include "task_priorities"
+#include "logger.h"
 #include "lvgl_ui.h"
 
 #define DATA_POINTS 24*6
+
+#ifdef ENABLE_LOG
 
 int32_t data[DATA_POINTS];
 int32_t min, max;
@@ -66,5 +69,7 @@ void stats_task() {
 
 void stats_start()
 {
-//	xTaskCreate( stats_task, "stats", 4096, NULL, STATS_TASK_PRIORITY, NULL );
+	xTaskCreate( stats_task, "stats", 4096, NULL, STATS_TASK_PRIORITY, NULL );
 }
+
+#endif

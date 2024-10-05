@@ -8,6 +8,10 @@
 extern "C" {
 #endif
 
+#ifdef CONFIG_EXAMPLE_ENABLE_STATUS_LOG
+#define ENABLE_LOG
+#endif
+
 #define SNAPSHOT_BUFFER_SIZE 24*60
 
 struct snapshot {
