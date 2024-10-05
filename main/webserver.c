@@ -184,7 +184,7 @@ void send_sensor_update(){
 						if (websock_clients[i].handle != NULL)
 						{
 							json_string = json_update();
-							ESP_LOGD( TAG, "json_str: %s", json_string );
+							ESP_LOGI( TAG, "json_str: %s, length: %d", json_string, strlen(json_string) );
 							send_sensor_update_frame(json_string, i);
 						}
 					}
@@ -268,9 +268,11 @@ static esp_err_t get_ws_handler( httpd_req_t *req )
 				break;
 			
 			case 'S':
+#ifdef ENABLE_LOG
 				if(strcmp((char *) ws_pkt.payload, "SavePoints") == 0){
 					stats_save();
 				}
+#endif
 				break;
 		}
 	}
