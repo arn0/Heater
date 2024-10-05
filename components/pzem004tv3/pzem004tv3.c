@@ -119,12 +119,12 @@ bool PzSetAddress(pzem_setup_t *pzSetup, uint8_t new_addr)
 
     // sanity check, see if address is valid
     if (new_addr < 0x01 || new_addr > 0xF7 ) {
-        ESP_LOGI(LOG_TAG, "Address failed sanity check");
+        ESP_LOGE(LOG_TAG, "Address failed sanity check");
         return false;
     }
 
     if (pzSetup->pzem_addr  == new_addr) {
-        ESP_LOGI(LOG_TAG, "New address is the same as the old address");
+        ESP_LOGW(LOG_TAG, "New address is the same as the old address");
         return false;
     }
 
@@ -259,12 +259,13 @@ bool PzemGetValues( pzem_setup_t *pzSetup, _current_values_t *pmonValues )
 
     /* Read response from the sensor, if everything goes well we retreived 25 Bytes */
     if ( PzemReceive( pzSetup, respbuff, RESP_BUF_SIZE ) != RESP_BUF_SIZE ) { /* Something went wrong */
+        ESP_LOGD(LOG_TAG, "Wrong response size !!");
         return false;
     }
 
     if ( !PzemCheckCRC( respbuff, RESP_BUF_SIZE ) ) {
-        ESP_LOGV( LOG_TAG, "Retreived buffer CRC check failed" );
-        return false;
+        ESP_LOGE( LOG_TAG, "Retreived buffer CRC check failed" );
+                return false;
     } else {
         ESP_LOGV( LOG_TAG, "CRC check OK for GetValues()" );
     }
@@ -311,7 +312,7 @@ bool PzemGetValues( pzem_setup_t *pzSetup, _current_values_t *pmonValues )
     */
     pmonValues->reactive_power = pmonValues->apparent_power * sinf(pmonValues->fi);         // replacd sin() with sinf() as we mainly use floats instead of double
 
-    return true;
+        return true;
 }
 
 /**
