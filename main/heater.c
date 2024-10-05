@@ -44,8 +44,6 @@ void heater_task() {
 			heater_status.one_set = false;
 			heater_status.two_pwr = false;
 			heater_status.two_set = false;
-			heater_status.web |= ONE_W_FL;
-			heater_status.web |= TWO_W_FL;
 		}
 
 		// Wait for the next cycle.
@@ -62,14 +60,12 @@ void heater_task() {
 				tick = false;
 				if( heater_status.one_set != heater_status.one_pwr ){
 					heater_status.one_pwr = heater_status.one_set;
-					heater_status.web |= ONE_W_FL;
 					gpio_set_level( SSR_ONE_GPIO_PIN, heater_status.one_pwr );
 				}
 			} else {
 				tick = true;
 				if( heater_status.two_set != heater_status.two_pwr ){
 					heater_status.two_pwr = heater_status.two_set;
-					heater_status.web |= TWO_W_FL;
 					gpio_set_level( SSR_TWO_GPIO_PIN, heater_status.two_pwr );
 				}
 			}

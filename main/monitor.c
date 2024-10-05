@@ -53,6 +53,9 @@ time_t log_saved_time, log_update_time;
 
 time_t now, next_heap_time;
 
+int32_t start_pzem;
+#define WAIT_PZEM 15
+
 void monitor_task(){
 	TickType_t xPreviousWakeTime;
 	const TickType_t xTimeIncrement = pdMS_TO_TICKS(MONITOR_TASK_DELAY_MS);
@@ -68,26 +71,30 @@ void monitor_task(){
 			ESP_LOGW(TAG, "Task was not delayed");
 		}
 
-      if( PzemGetValues( &pzConf, &pzValues )) {
-			heater_status.voltage = pzValues.voltage;
-			heater_status.current = pzValues.current/5;
-			heater_status.power = pzValues.power/5;
-			heater_status.energy = pzValues.energy/5;
-			heater_status.pf = pzValues.pf;
-		}
-		else {
-			heater_status.voltage = 0;
-			heater_status.current = 0;
-			heater_status.power = 0;
-			heater_status.energy = 0;
-			heater_status.pf = 0;
+		if( start_pzem <= WAIT_PZEM ){
+			start_pzem++;
+		} else {
+	      if( PzemGetValues( &pzConf, &pzValues )) {
+				heater_status.voltage = pzValues.voltage;
+				heater_status.current = pzValues.current/5;
+				heater_status.power = pzValues.power/5;
+				heater_status.energy = pzValues.energy/5;
+				heater_status.pf = pzValues.pf;
+			}
+			else {
+				//ESP_LOGI(TAG, "PzemGetValues returned false");
+				heater_status.voltage = 0;
+				heater_status.current = 0;
+				heater_status.power = 0;
+				heater_status.energy = 0;
+				heater_status.pf = 0;
+			}
 		}
 
 		switch( step++ ) {
 			case 0:
 				// chip temperature reading
 				ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_sensor, &heater_status.chip));
-				heater_status.web |= CHP_W_FL;
 				break;
 
 				// ds18b20 temperature reading
@@ -100,7 +107,6 @@ void monitor_task(){
 			case 2:
 				if(t_sensor_fnt){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_fnt, &heater_status.fnt));
-					heater_status.web |= FNT_W_FL;
 					ESP_LOGD(TAG, "fnt: %f", heater_status.fnt);
 				}
 				break;
@@ -114,7 +120,6 @@ void monitor_task(){
 			case 4:
 				if(t_sensor_bck){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bck, &heater_status.bck));
-					heater_status.web |= BCK_W_FL;
 					ESP_LOGD(TAG, "bck: %f", heater_status.bck);
 				}
 				break;
@@ -128,7 +133,6 @@ void monitor_task(){
 			case 6:
 				if(t_sensor_top){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_top, &heater_status.top));
-					heater_status.web |= TOP_W_FL;
 					ESP_LOGD(TAG, "top: %f", heater_status.top);
 				}
 				break;
@@ -142,7 +146,6 @@ void monitor_task(){
 			case 8:
 				if(t_sensor_bot){
 					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bot, &heater_status.bot));
-					heater_status.web |= BOT_W_FL;
 					ESP_LOGD(TAG, "bot: %f", heater_status.bot);
 				}
 				break;

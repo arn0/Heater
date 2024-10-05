@@ -257,13 +257,13 @@ static esp_err_t get_ws_handler( httpd_req_t *req )
 		switch(ws_pkt.payload[0]){
 			case 'D':
 				heater_status.target -= HEATER_WEB_STEP;
-				heater_status.web |= TAR_W_FL;
+				heater_status.update = true;
 				next_log_time = 0;		// send update immediately
 				break;
 
 			case 'U':
 				heater_status.target += HEATER_WEB_STEP;
-				heater_status.web |= TAR_W_FL;
+				heater_status.update = true;
 				next_log_time = 0;		// send update immediately
 				break;
 			
@@ -292,9 +292,6 @@ esp_err_t get_index_handler(httpd_req_t *req)
 	ESP_ERROR_CHECK(httpd_resp_set_type(req, "text/html"));
 	readSize = read_spiff_buffer("/data/index.html");
 	ESP_ERROR_CHECK(httpd_resp_send(req, readBuf, readSize));
-
-	heater_status.web = TAR_W_FL | ONE_W_FL | TWO_W_FL;		// force update once
-
 	return ESP_OK;
 }
 
