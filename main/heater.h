@@ -5,12 +5,18 @@
 extern "C" {
 #endif
 
-//struct heat_dat {
-//	float val;
-//	bool web;
-//	bool dsp;
-//	bool mat;
-//};
+/*
+ * Let's say, GPIO_OUTPUT_IO_0=18, GPIO_OUTPUT_IO_1=19
+ * In binary representation,
+ * 1ULL<<GPIO_OUTPUT_IO_0 is equal to 0000000000000000000001000000000000000000 and
+ * 1ULL<<GPIO_OUTPUT_IO_1 is equal to 0000000000000000000010000000000000000000
+ * GPIO_OUTPUT_PIN_SEL                0000000000000000000011000000000000000000
+ */
+
+#define GPIO_OUTPUT_PIN_SEL  ((1ULL<<SSR_ONE_GPIO_PIN) | (1ULL<<SSR_TWO_GPIO_PIN))
+
+#define TARGET_DEFAULT 20.5
+#define MAX_TEMP 105.0
 
 struct heater_status {
 	float target;

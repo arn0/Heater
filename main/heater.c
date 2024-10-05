@@ -9,17 +9,6 @@
 #include "lvgl_ui.h"
 
 
-/*
- * Let's say, GPIO_OUTPUT_IO_0=18, GPIO_OUTPUT_IO_1=19
- * In binary representation,
- * 1ULL<<GPIO_OUTPUT_IO_0 is equal to 0000000000000000000001000000000000000000 and
- * 1ULL<<GPIO_OUTPUT_IO_1 is equal to 0000000000000000000010000000000000000000
- * GPIO_OUTPUT_PIN_SEL                0000000000000000000011000000000000000000
- */
-
-#define GPIO_OUTPUT_PIN_SEL  ((1ULL<<SSR_ONE_GPIO_PIN) | (1ULL<<SSR_TWO_GPIO_PIN))
-#define MAX_TEMP 100.0
-
 static const char *TAG = "heaters";
 
 struct heater_status heater_status;										// global access to heater staus
@@ -117,7 +106,6 @@ bool start_heater_task(){
 	heater_status.two_pwr =false;
 	heater_status.one_set = false;
 	heater_status.two_set = false;
-	heater_status.target = 21;
 	
 	// Now we start the heater contol loop
 
