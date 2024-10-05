@@ -18,7 +18,7 @@
  */
 
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<SSR_ONE_GPIO_PIN) | (1ULL<<SSR_TWO_GPIO_PIN))
-#define OVERHEATED 90.0
+#define MAX_TEMP 100.0
 
 static const char *TAG = "heaters";
 
@@ -35,11 +35,17 @@ void heater_task() {
 	xPreviousWakeTime = xTaskGetTickCount ();
 
 	do {
-		// Check for overheating
-		if( heater_status.fnt > OVERHEATED || heater_status.bck > OVERHEATED || heater_status.top > OVERHEATED || heater_status.bot > OVERHEATED || heater_status.chip > OVERHEATED ) {
-			heater_status.safe = false;
+		// Check for maximum temperature
+		if( heater_status.fnt > MAX_TEMP || heater_status.bck > MAX_TEMP || heater_status.top > MAX_TEMP || heater_status.bot > MAX_TEMP || heater_status.chip > MAX_TEMP ) {
 			gpio_set_level( SSR_ONE_GPIO_PIN, 0 );
 			gpio_set_level( SSR_TWO_GPIO_PIN, 0 );
+			heater_status.safe = false;
+			heater_status.one_pwr = false;
+			heater_status.one_set = false;
+			heater_status.two_pwr = false;
+			heater_status.two_set = false;
+			heater_status.web |= ONE_W_FL;
+			heater_status.web |= TWO_W_FL;
 		}
 
 		// Wait for the next cycle.
