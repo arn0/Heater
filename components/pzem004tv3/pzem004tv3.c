@@ -66,15 +66,15 @@ void PzemInit( pzem_setup_t *pzSetup )
  */
 uint16_t PzemReceive( pzem_setup_t *pzSetup, uint8_t *resp, uint16_t len )
 {
-    static const char *LOG_TAG = "PZ_RECEIVE";
+    static const char *LOG_TAG = "PzemReceive";
 
     /* Configure a temporary buffer for the incoming data */
     uint16_t rxBytes = uart_read_bytes( pzSetup->pzem_uart, resp, len, pdMS_TO_TICKS( PZ_READ_TIMEOUT ) );
 
     if ( rxBytes > 0 ) {
         resp[ rxBytes ] = 0;
-        ESP_LOGV( LOG_TAG, "Read %d  bytes: '%s'", rxBytes, resp );
-        ESP_LOG_BUFFER_HEXDUMP( LOG_TAG, resp, rxBytes, ESP_LOG_VERBOSE );
+        ESP_LOGD( LOG_TAG, "Read %d  bytes: '%s'", rxBytes, resp );
+        ESP_LOG_BUFFER_HEXDUMP( LOG_TAG, resp, rxBytes, ESP_LOG_DEBUG );
     }
 
     return rxBytes;
@@ -321,8 +321,8 @@ bool PzemGetValues( pzem_setup_t *pzSetup, _current_values_t *pmonValues )
  */
 void PzemSetCRC( uint8_t *buf, uint16_t len )
 {
-    static const char *TAG = "[SETCRC]";
-    uint64_t start = esp_timer_get_time();
+//  static const char *TAG = "[SETCRC]";
+//  uint64_t start = esp_timer_get_time();
 
     if ( len <= 2 ) { /* sanity check */
         return;
@@ -334,8 +334,8 @@ void PzemSetCRC( uint8_t *buf, uint16_t len )
     buf[ len - 2 ] = crc & 0xFF;          /* Low byte first */
     buf[ len - 1 ] = ( crc >> 8 ) & 0xFF; /* High byte second */
 
-    uint64_t stop = esp_timer_get_time();
-    ESP_LOGV(TAG, "Routine crc16() took %llu microseconds", (stop - start));
+//  uint64_t stop = esp_timer_get_time();
+//  ESP_LOGV(TAG, "Routine crc16() took %llu microseconds", (stop - start));
 }
 
 /**
