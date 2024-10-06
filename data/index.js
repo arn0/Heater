@@ -60,9 +60,9 @@ function onMessage(event) {
 	te_chp.textContent = update.chip.toFixed(1);
 	target.textContent = update.target.toFixed(1);
 	volt.textContent = update.voltage.toFixed(1);
-	amp.textContent = update.current.toFixed(1);
+	amp.textContent = update.current.toFixed(3);
 	watt.textContent = update.power.toFixed(1);
-	kwh.textContent = update.energy.toFixed(1);
+	kwh.textContent = update.energy.toFixed(2);
 	pf.textContent = update.pf.toFixed(3);
 	if(update.one_pwr){
 		indicator1.className = 'indicator-on';
