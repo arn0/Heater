@@ -40,10 +40,9 @@ bool bluetooth = false;
 
 void app_main(void)
 {
-	timezone_set();
+	timezone_set();												// First to do to get log entries right timestamp
 
-	//Initialize NVS
-	esp_err_t ret = nvs_flash_init();
+		esp_err_t ret = nvs_flash_init();					//Initialize NVS
 	if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
 		ESP_ERROR_CHECK(nvs_flash_erase());
 		ret = nvs_flash_init();
@@ -53,14 +52,14 @@ void app_main(void)
 	ESP_ERROR_CHECK( spiffs_init( "/data") );				// Initialize SPIFFS which holds the HTML/CSS/JS files we serve to client browser
 																		// and to store statistics file
 	//real_time_stats();
-	start_heater_task();			// error check here
+	start_heater_task();											// error check here
 	start_monitor_task();
 	//lcd_start();
 	//led_strip_start();
 	start_control_task();
 	clock_start();
 
-	vTaskDelay(pdMS_TO_TICKS(1000));		// need a little time before wifi is ready
+	vTaskDelay(pdMS_TO_TICKS(1000));							// need a little time before wifi is ready
 
 	ESP_LOGI(TAG, "Start wifi_init_station()");
 	wifi_init_station();
