@@ -5,11 +5,15 @@
 extern "C" {
 #endif
 
+#ifdef CONFIG_EXAMPLE_ENABLE_LCD
+
 extern bool wifi_connected;
 extern bool stats_read_postponed;
 void lvgl_ui_update(void);
 esp_err_t stats_save();
 esp_err_t stats_read();
+
+#endif // CONFIG_EXAMPLE_ENABLE_LCD
 
 #ifdef __cplusplus
 }

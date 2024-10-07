@@ -23,9 +23,10 @@
 
 #define DAY_TO_S(TimeInDays) ( ( time_t ) ( ( ( time_t ) ( TimeInDays ) * ( time_t ) 24*60*60 ) ) )
 
+#ifdef CONFIG_EXAMPLE_ENABLE_LCD
+
 static const char *TAG = "lvgl_ui";
 
-bool wifi_connected = false;
 bool lvg_ui_started = false;
 
 #define DATA_POINTS 24*8
@@ -78,7 +79,7 @@ void lvgl_ui_update(void)
 		lv_label_set_text_fmt(obj_t_2, "%.01f\u00b0C", heater_status.top);
 		lv_label_set_text_fmt(obj_t_3, "%.01f\u00b0C", heater_status.bot);
 
-		if(heater_status.one_pwr)
+		if(heater_status.one_on)
 		{
 			lv_obj_set_style_text_color(obj_h_1, c_red, LV_PART_MAIN);
 			lv_obj_set_style_text_opa(obj_h_1, LV_OPA_COVER, LV_PART_MAIN);
@@ -87,7 +88,7 @@ void lvgl_ui_update(void)
 			lv_obj_set_style_text_opa(obj_h_1, LV_OPA_40, LV_PART_MAIN);
 		}
 
-		if(heater_status.two_pwr)
+		if(heater_status.two_on)
 		{
 			lv_obj_set_style_text_color(obj_h_2, c_red, LV_PART_MAIN);
 			lv_obj_set_style_text_opa(obj_h_2, LV_OPA_COVER, LV_PART_MAIN);
@@ -96,7 +97,7 @@ void lvgl_ui_update(void)
 			lv_obj_set_style_text_opa(obj_h_2, LV_OPA_40, LV_PART_MAIN);
 		}
 
-		if(wifi_connected)
+		if(heater_status.wifi)
 		{
 			lv_obj_set_style_text_opa(obj_wifi, LV_OPA_COVER, LV_PART_MAIN);
 		} else {
@@ -474,3 +475,4 @@ void stats_start()
 }
 
 #endif // ENABLE_LOG
+#endif // CONFIG_EXAMPLE_ENABLE_LCD

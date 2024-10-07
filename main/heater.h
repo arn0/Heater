@@ -31,12 +31,13 @@ struct heater_status {
    float power;            // Active Power P. or Real Power W.
    float energy;
    float pf;               // Ratio of active to apparent power, cos(fi), eg pf = 0.77, 77% of current is doing the real work
-	bool one_pwr;
-	bool one_set;
-	bool two_pwr;
-	bool two_set;
+	bool one_on;
+	bool one_gpio;
+	bool two_on;
+	bool two_gpio;
 	bool safe;
 	bool update;
+	bool wifi;
 	bool blue;
 };
 

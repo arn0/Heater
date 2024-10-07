@@ -21,6 +21,7 @@
 
 #include "events.h"
 #include "wifi_station.h"
+#include "heater.h"
 #include "lvgl_ui.h"
 #include "sntp.h"
 #include "../../secret.h"
@@ -60,9 +61,12 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 			break;
 		case WIFI_EVENT_STA_DISCONNECTED:
 			ESP_LOGI(TAG, "wifi event handler: Station disconnected from AP");
-			wifi_connected = false;
+			heater_status.wifi = false;
 			sntp_client_stop();
+
+#ifdef CONFIG_EXAMPLE_ENABLE_LCD
 			lvgl_ui_update();
+#endif
 			if (s_retry_num < WIFI_MAXIMUM_RETRY) {
 				vTaskDelay(pdMS_TO_TICKS(WIFI_SHORT_DELAY_MS));
 				esp_wifi_connect();
@@ -186,13 +190,17 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
 			ESP_LOGI(TAG, "ip event handler: got ip:" IPSTR, IP2STR(&event->ip_info.ip));
 			s_retry_num = 0;
 			xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-			wifi_connected = true;
+			 heater_status.wifi = true;
+#ifdef CONFIG_EXAMPLE_ENABLE_LCD
 			lvgl_ui_update();
+#endif
 			break;
 		case IP_EVENT_STA_LOST_IP: /*!< station lost IP and the IP is reset to 0 */
 			ESP_LOGI(TAG, "ip event handler: IP_EVENT_STA_LOST_IP");
-			wifi_connected = false;
+			heater_status.wifi = false;
+#ifdef CONFIG_EXAMPLE_ENABLE_LCD
 			lvgl_ui_update();
+#endif
 			break;
 		case IP_EVENT_AP_STAIPASSIGNED: /*!< soft-AP assign an IP to a connected station */
 			ESP_LOGI(TAG, "ip event handler: IP_EVENT_AP_STAIPASSIGNED");

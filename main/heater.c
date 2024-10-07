@@ -29,10 +29,10 @@ void heater_task() {
 			gpio_set_level( SSR_ONE_GPIO_PIN, 0 );
 			gpio_set_level( SSR_TWO_GPIO_PIN, 0 );
 			heater_status.safe = false;
-			heater_status.one_pwr = false;
-			heater_status.one_set = false;
-			heater_status.two_pwr = false;
-			heater_status.two_set = false;
+			heater_status.one_on = false;
+			heater_status.one_gpio = false;
+			heater_status.two_on = false;
+			heater_status.two_gpio = false;
 		}
 
 		// Wait for the next cycle.
@@ -47,15 +47,15 @@ void heater_task() {
 		if( heater_status.safe ) {
 			if( tick ){
 				tick = false;
-				if( heater_status.one_set != heater_status.one_pwr ){
-					heater_status.one_pwr = heater_status.one_set;
-					gpio_set_level( SSR_ONE_GPIO_PIN, heater_status.one_pwr );
+				if( heater_status.one_gpio != heater_status.one_on ){
+					heater_status.one_on = heater_status.one_gpio;
+					gpio_set_level( SSR_ONE_GPIO_PIN, heater_status.one_on );
 				}
 			} else {
 				tick = true;
-				if( heater_status.two_set != heater_status.two_pwr ){
-					heater_status.two_pwr = heater_status.two_set;
-					gpio_set_level( SSR_TWO_GPIO_PIN, heater_status.two_pwr );
+				if( heater_status.two_gpio != heater_status.two_on ){
+					heater_status.two_on = heater_status.two_gpio;
+					gpio_set_level( SSR_TWO_GPIO_PIN, heater_status.two_on );
 				}
 			}
 		} else {
@@ -102,10 +102,10 @@ bool start_heater_task(){
 	}
 
 	heater_status.safe = false;							// initialize heater status
-	heater_status.one_pwr = false;
-	heater_status.two_pwr =false;
-	heater_status.one_set = false;
-	heater_status.two_set = false;
+	heater_status.one_on = false;
+	heater_status.two_on =false;
+	heater_status.one_gpio = false;
+	heater_status.two_gpio = false;
 	
 	// Now we start the heater contol loop
 

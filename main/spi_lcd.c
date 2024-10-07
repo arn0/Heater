@@ -22,6 +22,8 @@
 #include "lvgl_ui.h"
 #include "task_priorities"
 
+#ifdef CONFIG_EXAMPLE_ENABLE_LCD
+
 static const char *TAG = "spi_lcd";
 
 // Using SPI2 in the example
@@ -190,3 +192,4 @@ void lcd_start(void)
 
     xTaskCreate( lv_task, "lv_task", 4096, NULL, LVGL_TASK_PRIORITY, NULL );
 }
+#endif // CONFIG_EXAMPLE_ENABLE_LCD

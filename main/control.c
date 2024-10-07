@@ -100,17 +100,17 @@ void control_task(){
 
 		delta = heater_status.target - heater_status.rem;
 		if( delta <= 0 ){
-			heater_status.one_set = false;
-			heater_status.two_set = false;
+			heater_status.one_gpio = false;
+			heater_status.two_gpio = false;
 		} else if( delta > 0.4 ) {
-			heater_status.one_set = true;
-			heater_status.two_set = true;
+			heater_status.one_gpio = true;
+			heater_status.two_gpio = true;
 		} else if( delta > 0.2 ) {
-			heater_status.one_set = false;
-			heater_status.two_set = true;
+			heater_status.one_gpio = false;
+			heater_status.two_gpio = true;
 		} else {
-			heater_status.one_set = true;
-			heater_status.two_set = false;
+			heater_status.one_gpio = true;
+			heater_status.two_gpio = false;
 		}
 	}while (true);
 }
@@ -120,8 +120,8 @@ bool start_control_task(){
 	// First thing to do considering safety:
 	// turn the heaters OFF
 
-	heater_status.one_set = false;
-	heater_status.two_set = false;
+	heater_status.one_gpio = false;
+	heater_status.two_gpio = false;
 	heater_status.safe = false;
 
 	if( read_target( &heater_status.target ) != ESP_OK ) {

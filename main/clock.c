@@ -10,6 +10,7 @@
 #include "task_priorities"
 #include "lvgl_ui.h"
 
+#ifdef CONFIG_EXAMPLE_ENABLE_LCD
 
 char strftime_buf[64];
 struct tm timeinfo;
@@ -44,3 +45,5 @@ void clock_start(void)
 {
 	xTaskCreate( clock_task, "clock", 4096/2, NULL, CLOCK_TASK_PRIORITY, NULL );
 }
+
+#endif // CONFIG_EXAMPLE_ENABLE_LCD
