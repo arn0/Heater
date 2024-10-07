@@ -58,19 +58,13 @@ int32_t start_pzem;
 
 void monitor_task(){
 	TickType_t xPreviousWakeTime;
-	const TickType_t xTimeIncrement = pdMS_TO_TICKS(MONITOR_TASK_DELAY_MS);
+	const TickType_t xTimeIncrement = pdMS_TO_TICKS( MONITOR_TASK_DELAY_MS );
 	BaseType_t xWasDelayed;
 	int step = 0;
 
 	xPreviousWakeTime = xTaskGetTickCount ();					// Initialise the xPreviousWakeTime variable with the current time
 
 	do {
-		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );					// Wait for the next cycle
-
-		if( xWasDelayed == pdFALSE ) {
-			ESP_LOGW(TAG, "Task was not delayed");
-		}
-
 		if( start_pzem <= WAIT_PZEM ){
 			start_pzem++;
 		} else {
@@ -171,7 +165,13 @@ void monitor_task(){
 			default:
 				step = 0;
 		}
-	} while (true);
+		// Wait for the next cycle
+		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );
+
+		if ( xWasDelayed == pdFALSE ) {
+			ESP_LOGW( TAG, "Task was not delayed" );
+		}
+	} while ( true );
 }
 
 /* Initialize requirements for the heater control loop
@@ -180,7 +180,7 @@ void monitor_task(){
  * heater solid state relais
 */
 
-bool start_monitor_task(){
+bool start_monitor_task() {
 
 	// start internal on-chip temperature sensor
 	// FIXME: need to go over config details!!!
@@ -260,6 +260,8 @@ bool start_monitor_task(){
 	next_heap_time = log_saved_time;
 	log_read();
 #endif
+
+	heater_status.safe = true;
 
 	xTaskCreate( monitor_task, "monitor", 4096/2+512, NULL, MONITOR_TASK_PRIORITY, NULL );
 

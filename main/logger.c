@@ -35,9 +35,9 @@ esp_err_t log_add(){
 	log_base[log_counter].chip = heater_status.chip;
 	log_base[log_counter].rem = heater_status.rem;
 	log_base[log_counter].one_gpio = heater_status.one_gpio;
-	log_base[log_counter].one_pwr = heater_status.one_pwr;
+	log_base[log_counter].one_on = heater_status.one_on;
 	log_base[log_counter].two_gpio = heater_status.two_gpio;
-	log_base[log_counter].two_pwr = heater_status.two_pwr;
+	log_base[log_counter].two_on = heater_status.two_on;
 	log_base[log_counter].safe = heater_status.safe;
 
 	if (log_counter < SNAPSHOT_BUFFER_SIZE)

@@ -16,7 +16,8 @@ extern "C" {
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<SSR_ONE_GPIO_PIN) | (1ULL<<SSR_TWO_GPIO_PIN))
 
 #define TARGET_DEFAULT 20.5
-#define MAX_TEMP 105.0
+#define MAX_INTERNAL_TEMP 70.0
+#define MAX_TEMP 100.0
 
 struct heater_status {
 	float target;
@@ -31,9 +32,9 @@ struct heater_status {
    float power;            // Active Power P. or Real Power W.
    float energy;
    float pf;               // Ratio of active to apparent power, cos(fi), eg pf = 0.77, 77% of current is doing the real work
-	bool one_pwr;
+	bool one_on;
 	bool one_gpio;
-	bool two_pwr;
+	bool two_on;
 	bool two_gpio;
 	bool safe;
 	bool update;

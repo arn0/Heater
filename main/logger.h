@@ -30,9 +30,9 @@ struct snapshot {
    float pf;               // Ratio of active to apparent power, cos(fi), eg pf = 0.77, 77% of current is doing the real work
 	uint16_t web;
 	bool one_gpio : 1;
-	bool one_pwr : 1;
+	bool one_on : 1;
 	bool two_gpio : 1;
-	bool two_pwr : 1;
+	bool two_on : 1;
 	bool safe : 1;
 };
 
