@@ -9,7 +9,7 @@
 #include "pzem004tv3.h"
 
 #include "gpio_pins.h"
-#include "task_priorities"
+#include "task_priorities.h"
 #include "heater.h"
 #include "lvgl_ui.h"
 #include "logger.h"
@@ -180,7 +180,7 @@ void monitor_task() {
  * heater solid state relais
 */
 
-bool start_monitor_task() {
+bool monitor_task_start() {
 
 	// start internal on-chip temperature sensor
 	// FIXME: need to go over config details!!!

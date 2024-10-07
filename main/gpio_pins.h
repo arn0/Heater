@@ -3,6 +3,9 @@
  * For ESP32C6
  */
 
+#ifndef GPIO_PINS_H
+#define GPIO_PINS_H
+
 #include "driver/gpio.h"
 
 /*
@@ -37,3 +40,5 @@
 // voltage and current measuring
 #define PZEM_TX_GPIO_PIN			GPIO_NUM_4
 #define PZEM_RX_GPIO_PIN			GPIO_NUM_5
+
+#endif // GPIO_PINS_H

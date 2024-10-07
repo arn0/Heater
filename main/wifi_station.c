@@ -15,7 +15,6 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
-
 #include "lwip/err.h"
 #include "lwip/sys.h"
 
@@ -37,40 +36,40 @@ EventGroupHandle_t s_wifi_event_group;
 
 static int s_retry_num = 0;
 
-static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+static void wifi_event_handler( void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data )
 {
-	if (event_base == WIFI_EVENT) {
-		switch (event_id) {
+	if ( event_base == WIFI_EVENT ) {
+		switch ( event_id ) {
 		case WIFI_EVENT_WIFI_READY:
-			ESP_LOGI(TAG, "wifi event handler: WiFi ready");
+			ESP_LOGI( TAG, "wifi event handler: WiFi ready" );
 			break;
 		case WIFI_EVENT_SCAN_DONE:
-			ESP_LOGI(TAG, "wifi event handler: Finished scanning AP");
+			ESP_LOGI( TAG, "wifi event handler: Finished scanning AP" );
 			break;
 		case WIFI_EVENT_STA_START:
-			ESP_LOGI(TAG, "wifi event handler: Station start");
+			ESP_LOGI( TAG, "wifi event handler: Station start" );
 			esp_wifi_connect();
-			ESP_LOGI(TAG, "wifi event handler: esp_wifi_connect() done");
+			ESP_LOGI( TAG, "wifi event handler: esp_wifi_connect() done" );
 			break;
 		case WIFI_EVENT_STA_STOP:
-			ESP_LOGI(TAG, "wifi event handler: Station stop");
+			ESP_LOGI( TAG, "wifi event handler: Station stop" );
 			break;
 		case WIFI_EVENT_STA_CONNECTED:
-			ESP_LOGI(TAG, "wifi event handler: Station connected to AP");
+			ESP_LOGI( TAG, "wifi event handler: Station connected to AP" );
 			s_retry_num = 0;
 			break;
 		case WIFI_EVENT_STA_DISCONNECTED:
-			ESP_LOGI(TAG, "wifi event handler: Station disconnected from AP");
+			ESP_LOGI( TAG, "wifi event handler: Station disconnected from AP" );
 			heater_status.wifi = false;
 			sntp_client_stop();
 
 #ifdef CONFIG_EXAMPLE_ENABLE_LCD
 			lvgl_ui_update();
 #endif
-			if (s_retry_num < WIFI_MAXIMUM_RETRY) {
-				vTaskDelay(pdMS_TO_TICKS(WIFI_SHORT_DELAY_MS));
+			if ( s_retry_num < WIFI_MAXIMUM_RETRY ) {
+				vTaskDelay( pdMS_TO_TICKS( WIFI_SHORT_DELAY_MS ) );
 				esp_wifi_connect();
-				ESP_LOGI(TAG, "wifi event handler: esp_wifi_connect() done, retry %d", s_retry_num);
+				ESP_LOGI( TAG, "wifi event handler: esp_wifi_connect() done, retry %d", s_retry_num );
 				s_retry_num++;
 			} else {
 				vTaskDelay(pdMS_TO_TICKS(WIFI_LONG_DELAY_MS));
@@ -180,69 +179,69 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 	}
 }
 
-static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+static void ip_event_handler( void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data )
 {
 	if (event_base == IP_EVENT) {
-		switch (event_id) {
+		switch ( event_id ) {
 		case IP_EVENT_STA_GOT_IP: /*!< station got IP from connected AP */
-			ESP_LOGI(TAG, "ip event handler: IP_EVENT_STA_GOT_IP");
+			ESP_LOGI( TAG, "ip event handler: IP_EVENT_STA_GOT_IP" );
 			ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-			ESP_LOGI(TAG, "ip event handler: got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+			ESP_LOGI( TAG, "ip event handler: got ip:" IPSTR, IP2STR( &event->ip_info.ip ) );
 			s_retry_num = 0;
-			xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+			xEventGroupSetBits( s_wifi_event_group, WIFI_CONNECTED_BIT );
 			 heater_status.wifi = true;
 #ifdef CONFIG_EXAMPLE_ENABLE_LCD
 			lvgl_ui_update();
 #endif
 			break;
 		case IP_EVENT_STA_LOST_IP: /*!< station lost IP and the IP is reset to 0 */
-			ESP_LOGI(TAG, "ip event handler: IP_EVENT_STA_LOST_IP");
+			ESP_LOGI( TAG, "ip event handler: IP_EVENT_STA_LOST_IP" );
 			heater_status.wifi = false;
 #ifdef CONFIG_EXAMPLE_ENABLE_LCD
 			lvgl_ui_update();
 #endif
 			break;
 		case IP_EVENT_AP_STAIPASSIGNED: /*!< soft-AP assign an IP to a connected station */
-			ESP_LOGI(TAG, "ip event handler: IP_EVENT_AP_STAIPASSIGNED");
+			ESP_LOGI( TAG, "ip event handler: IP_EVENT_AP_STAIPASSIGNED" );
 			break;
 		case IP_EVENT_GOT_IP6: /*!< station or ap or ethernet interface v6IP addr is preferred */
-			ESP_LOGI(TAG, "ip event handler: IP_EVENT_GOT_IP6");
+			ESP_LOGI( TAG, "ip event handler: IP_EVENT_GOT_IP6" );
 			break;
 		case IP_EVENT_ETH_GOT_IP: /*!< ethernet got IP from connected AP */
-			ESP_LOGI(TAG, "ip event handler: IP_EVENT_ETH_GOT_IP");
+			ESP_LOGI( TAG, "ip event handler: IP_EVENT_ETH_GOT_IP" );
 			break;
 		case IP_EVENT_ETH_LOST_IP: /*!< ethernet lost IP and the IP is reset to 0 */
-			ESP_LOGI(TAG, "ip event handler: IP_EVENT_ETH_LOST_IP");
+			ESP_LOGI( TAG, "ip event handler: IP_EVENT_ETH_LOST_IP" );
 			break;
 		case IP_EVENT_PPP_GOT_IP: /*!< PPP interface got IP */
-			ESP_LOGI(TAG, "ip event handler: IP_EVENT_PPP_GOT_IP");
+			ESP_LOGI( TAG, "ip event handler: IP_EVENT_PPP_GOT_IP" );
 			break;
 		case IP_EVENT_PPP_LOST_IP: /*!< PPP interface lost IP */
-			ESP_LOGI(TAG, "ip event handler: IP_EVENT_PPP_LOST_IP");
+			ESP_LOGI( TAG, "ip event handler: IP_EVENT_PPP_LOST_IP" );
 			break;
 		default:
-			ESP_LOGE(TAG, "ip event handler: event_id %ld", event_id);
+			ESP_LOGE( TAG, "ip event handler: event_id %ld", event_id );
 			break;
 		}
 	} else {
-		ESP_LOGE(TAG, "ip event handler: event_base = %s ", event_base);
+		ESP_LOGE( TAG, "ip event handler: event_base = %s ", event_base);
 	}
 }
 
-void wifi_init_station(void)
+void wifi_init_station()
 {
 	s_wifi_event_group = xEventGroupCreate();
-	ESP_ERROR_CHECK(esp_event_loop_create_default());
+	ESP_ERROR_CHECK( esp_event_loop_create_default() );
 	
-	ESP_ERROR_CHECK(esp_netif_init());
+	ESP_ERROR_CHECK( esp_netif_init() );
 	esp_netif_create_default_wifi_sta();
 	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-	ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+	ESP_ERROR_CHECK( esp_wifi_init( &cfg ) );
 
 	esp_event_handler_instance_t instance_any_id;
 	esp_event_handler_instance_t instance_got_ip;
-	ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, &instance_any_id));
-	ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL, &instance_got_ip));
+	ESP_ERROR_CHECK( esp_event_handler_instance_register( WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, &instance_any_id ) );
+	ESP_ERROR_CHECK( esp_event_handler_instance_register( IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL, &instance_got_ip ) );
 
 	wifi_config_t wifi_config = {
 			.sta = {
@@ -254,10 +253,10 @@ void wifi_init_station(void)
 					.failure_retry_cnt = 3,
 			},
 	};
-	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-	ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-	vTaskDelay(pdMS_TO_TICKS(200));
-	ESP_ERROR_CHECK(esp_wifi_start());
+	ESP_ERROR_CHECK( esp_wifi_set_mode( WIFI_MODE_STA ) );
+	ESP_ERROR_CHECK( esp_wifi_set_config( WIFI_IF_STA, &wifi_config ) );
+	vTaskDelay( pdMS_TO_TICKS( 200 ) );
+	ESP_ERROR_CHECK( esp_wifi_start() );
 
 	ESP_LOGI(TAG, "wifi_init_station() finished.");
 }

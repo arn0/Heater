@@ -1,7 +1,7 @@
 #ifndef LVGL_UI_H
 #define LVGL_UI_H
-#ifdef __cplusplus
 
+#ifdef __cplusplus
 extern "C" {
 #endif
 

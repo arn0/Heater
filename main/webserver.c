@@ -19,7 +19,7 @@
 #include "esp_spiffs.h"
 
 #include "mount.h"
-#include "task_priorities"
+#include "task_priorities.h"
 #include "heater.h"
 #include "lvgl_ui.h"
 #include "json.h"
@@ -534,7 +534,7 @@ static esp_err_t download_get_handler(httpd_req_t *req)
  * Webserver
  */
 
-httpd_handle_t start_webserver(void)
+httpd_handle_t webserver_start(void)
 {
 	httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 	httpd_handle_t server = NULL;

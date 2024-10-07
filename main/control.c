@@ -6,7 +6,7 @@
 #include "esp_spiffs.h"
 #include "esp_log.h"
 
-#include "task_priorities"
+#include "task_priorities.h"
 #include "control.h"
 #include "heater.h"
 #include "lvgl_ui.h"
@@ -117,7 +117,7 @@ void control_task() {
 	}while ( true );
 }
 
-bool start_control_task(){
+bool control_task_start(){
 
 	// First thing to do considering safety:
 	// turn the heaters OFF

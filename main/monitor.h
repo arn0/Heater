@@ -1,11 +1,11 @@
 #ifndef MONITOR_H
 #define MONITOR_H
-#ifdef __cplusplus
 
+#ifdef __cplusplus
 extern "C" {
 #endif
 
-bool start_monitor_task();
+bool monitor_task_start();
 
 #ifdef __cplusplus
 }

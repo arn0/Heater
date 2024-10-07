@@ -44,7 +44,7 @@ struct heater_status {
 // global access to heater staus
 extern struct heater_status heater_status;
 
-bool start_heater_task();
+bool heater_task_start();
 
 #ifdef __cplusplus
 }

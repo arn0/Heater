@@ -1,0 +1,20 @@
+# http://clang.llvm.org/docs/ClangFormatStyleOptions.html
+
+BasedOnStyle: LLVM
+AllowShortFunctionsOnASingleLine: Empty
+UseTab: Never
+BreakBeforeBraces: Attach
+IndentWidth: 3
+TabWidth: 3
+AllowShortIfStatementsOnASingleLine: false
+IndentCaseLabels: false
+ColumnLimit: 0
+AccessModifierOffset: -3
+NamespaceIndentation: All
+FixNamespaceComments: false
+SpacesInParens: Custom
+SpacesInParensOptions:
+  InEmptyParentheses: false
+  InCStyleCasts: false
+  Other: true
+SortIncludes: Never

@@ -1,3 +1,6 @@
+#ifndef EVENTS_H
+#define EVENTS_H
+
 #include "freertos/event_groups.h"
 #include "esp_event.h"
 
@@ -11,4 +14,14 @@
 #define TCP_CONNECTED_BIT BIT3
 #define TCP_FAILED_BIT BIT4
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern EventGroupHandle_t s_wifi_event_group;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // EVENTS_H

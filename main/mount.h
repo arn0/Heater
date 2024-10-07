@@ -1,7 +1,7 @@
 #ifndef MOUNT_H
 #define MOUNT_H
-#ifdef __cplusplus
 
+#ifdef __cplusplus
 extern "C" {
 #endif
 

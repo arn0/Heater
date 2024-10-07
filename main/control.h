@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-bool start_control_task();
+bool control_task_start();
 
 #ifdef __cplusplus
 }

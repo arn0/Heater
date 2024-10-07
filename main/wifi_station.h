@@ -1,7 +1,7 @@
 #ifndef WIFI_STATION_H
 #define WIFI_STATION_H
-#ifdef __cplusplus
 
+#ifdef __cplusplus
 extern "C" {
 #endif
 

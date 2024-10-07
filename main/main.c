@@ -26,7 +26,6 @@
 #include "webserver.h"
 #include "bluetooth.h"
 #include "gpio_pins.h"
-#include "rgb_led.h"
 #include "spi_lcd.h"
 #include "clock.h"
 #include "../../secret.h"
@@ -53,14 +52,14 @@ void app_main( void )
 	ESP_ERROR_CHECK( spiffs_init( "/data") );		// Initialize SPIFFS which holds the HTML/CSS/JS files we serve to client browser
 																// and to store statistics file
 	//real_time_stats();
-	start_heater_task();									// Need error check here
-	start_monitor_task();
+	heater_task_start();									// Need error check here
+	monitor_task_start();
 #ifdef CONFIG_EXAMPLE_ENABLE_LCD
 	lcd_start();
 	clock_start();
 #endif
 	//led_strip_start();
-	start_control_task();
+	control_task_start();
 
 	vTaskDelay( pdMS_TO_TICKS( 1000 ) );			// need a little time before wifi is ready
 
@@ -85,7 +84,7 @@ void app_main( void )
 			ESP_LOGI( TAG, "connected to ap SSID:%s", SECRET_SSID );
 
  			sntp_client_start();
-			start_webserver();
+			webserver_start();
 			start_mdns_service();
 
 		} else if ( bits & WIFI_DISCONNECTED_BIT ) {

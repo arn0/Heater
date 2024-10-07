@@ -1,7 +1,7 @@
 #ifndef SPI_LCD_H
 #define SPI_LCD_H
-#ifdef __cplusplus
 
+#ifdef __cplusplus
 extern "C" {
 #endif
 

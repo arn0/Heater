@@ -15,7 +15,7 @@
 #include "esp_spiffs.h"
 #include "lvgl.h"
 
-#include "task_priorities"
+#include "task_priorities.h"
 #include "heater.h"
 #include "clock.h"
 #include "logger.h"

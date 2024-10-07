@@ -6,7 +6,7 @@
 #include "lvgl.h"
 
 #include "heater.h"
-#include "task_priorities"
+#include "task_priorities.h"
 #include "logger.h"
 #include "lvgl_ui.h"
 

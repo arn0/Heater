@@ -8,6 +8,9 @@
 // highest priority is configMAX_PRIORITIES - 1,
 // on this system 25 - 1 = 24
 
+#ifndef TASK_PRIORITIES_H
+#define TASK_PRIORITIES_H
+
 #define HEATER_TASK_PRIORITY		12
 #define HEATER_TASK_DELAY_MS		200
 #define CONTROL_TASK_PRIORITY		10
@@ -22,3 +25,5 @@
 #define CLOCK_TASK_DELAY_MS		1000
 #define STATS_TASK_PRIORITY		2
 #define STATS_TASK_DELAY_MS		1000*60*7.5		// 24 * 8 datapoints so 24 h of data
+
+#endif // TASK_PRIORITIES_H

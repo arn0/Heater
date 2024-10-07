@@ -20,7 +20,7 @@
 #include "gpio_pins.h"
 #include "spi_lcd.h"
 #include "lvgl_ui.h"
-#include "task_priorities"
+#include "task_priorities.h"
 
 #ifdef CONFIG_EXAMPLE_ENABLE_LCD
 

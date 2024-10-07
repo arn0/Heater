@@ -4,15 +4,15 @@
 #include "time.h"
 #include "esp_system.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifdef CONFIG_EXAMPLE_ENABLE_STATUS_LOG
 #define ENABLE_LOG
 #endif
 
 #define SNAPSHOT_BUFFER_SIZE 24*60
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct snapshot {
 	time_t time;
