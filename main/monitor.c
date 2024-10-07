@@ -56,7 +56,7 @@ time_t now, next_heap_time;
 int32_t start_pzem;
 #define WAIT_PZEM 15
 
-void monitor_task(){
+void monitor_task() {
 	TickType_t xPreviousWakeTime;
 	const TickType_t xTimeIncrement = pdMS_TO_TICKS(MONITOR_TASK_DELAY_MS);
 	BaseType_t xWasDelayed;
@@ -68,10 +68,10 @@ void monitor_task(){
 		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );					// Wait for the next cycle
 
 		if( xWasDelayed == pdFALSE ) {
-			ESP_LOGW(TAG, "Task was not delayed");
+			ESP_LOGW( TAG, "Task was not delayed" );
 		}
 
-		if( start_pzem <= WAIT_PZEM ){
+		if( start_pzem <= WAIT_PZEM ) {
 			start_pzem++;
 		} else {
 	      if( PzemGetValues( &pzConf, &pzValues )) {
@@ -82,7 +82,7 @@ void monitor_task(){
 				heater_status.pf = pzValues.pf;
 			}
 			else {
-				//ESP_LOGI(TAG, "PzemGetValues returned false");
+				ESP_LOGV(TAG, "PzemGetValues returned false");
 				heater_status.voltage = 0;
 				heater_status.current = 0;
 				heater_status.power = 0;
@@ -94,64 +94,64 @@ void monitor_task(){
 		switch( step++ ) {
 			case 0:
 				// chip temperature reading
-				ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_sensor, &heater_status.chip));
+				ESP_ERROR_CHECK( temperature_sensor_get_celsius( temp_sensor, &heater_status.chip ) );
 				break;
 
 				// ds18b20 temperature reading
 			case 1:
-				if(t_sensor_fnt){
-					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_fnt));
+				if ( t_sensor_fnt ) {
+					ESP_ERROR_CHECK( ds18b20_trigger_temperature_conversion( t_sensor_fnt ) );
 				}
 				break;
 
 			case 2:
-				if(t_sensor_fnt){
-					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_fnt, &heater_status.fnt));
-					ESP_LOGD(TAG, "fnt: %f", heater_status.fnt);
+				if ( t_sensor_fnt ) {
+					ESP_ERROR_CHECK( ds18b20_get_temperature( t_sensor_fnt, &heater_status.fnt ) );
+					ESP_LOGD( TAG, "fnt: %f", heater_status.fnt );
 				}
 				break;
 
 			case 3:
-				if(t_sensor_bck){
-					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_bck));
+				if ( t_sensor_bck ) {
+					ESP_ERROR_CHECK( ds18b20_trigger_temperature_conversion( t_sensor_bck ) );
 				}
 				break;
 
 			case 4:
-				if(t_sensor_bck){
-					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bck, &heater_status.bck));
-					ESP_LOGD(TAG, "bck: %f", heater_status.bck);
+				if ( t_sensor_bck ) {
+					ESP_ERROR_CHECK( ds18b20_get_temperature( t_sensor_bck, &heater_status.bck ) );
+					ESP_LOGD( TAG, "bck: %f", heater_status.bck );
 				}
 				break;
 
 			case 5:
-				if(t_sensor_top){
-					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_top));
+				if ( t_sensor_top ) {
+					ESP_ERROR_CHECK( ds18b20_trigger_temperature_conversion( t_sensor_top ) );
 				}
 				break;
 
 			case 6:
-				if(t_sensor_top){
-					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_top, &heater_status.top));
-					ESP_LOGD(TAG, "top: %f", heater_status.top);
+				if ( t_sensor_top ) {
+					ESP_ERROR_CHECK( ds18b20_get_temperature( t_sensor_top, &heater_status.top ));
+					ESP_LOGD( TAG, "top: %f", heater_status.top );
 				}
 				break;
 
 			case 7:
-				if(t_sensor_bot){
-					ESP_ERROR_CHECK(ds18b20_trigger_temperature_conversion(t_sensor_bot));
+				if ( t_sensor_bot ){
+					ESP_ERROR_CHECK( ds18b20_trigger_temperature_conversion( t_sensor_bot ) );
 				}
 				break;
 
 			case 8:
-				if(t_sensor_bot){
-					ESP_ERROR_CHECK(ds18b20_get_temperature(t_sensor_bot, &heater_status.bot));
-					ESP_LOGD(TAG, "bot: %f", heater_status.bot);
+				if ( t_sensor_bot ) {
+					ESP_ERROR_CHECK( ds18b20_get_temperature( t_sensor_bot, &heater_status.bot ) );
+					ESP_LOGD( TAG, "bot: %f", heater_status.bot );
 				}
 				break;
 
 			case 9:
-				time(&now);
+				time( &now );
 #ifdef ENABLE_LOG
 				if(now > log_update_time + 60){
 					log_add();
@@ -162,9 +162,9 @@ void monitor_task(){
 					log_saved_time = now;
 				}
 #endif
-				if(now > next_heap_time){
+				if ( now > next_heap_time ) {
 					next_heap_time = now + 60*10;
-					heap_caps_print_heap_info(MALLOC_CAP_DEFAULT);		// Log heap memory every 10 minutes
+					heap_caps_print_heap_info( MALLOC_CAP_DEFAULT );		// Log heap memory every 10 minutes
 				}
 				break;
 
@@ -180,7 +180,7 @@ void monitor_task(){
  * heater solid state relais
 */
 
-bool start_monitor_task(){
+bool start_monitor_task() {
 
 	// start internal on-chip temperature sensor
 	// FIXME: need to go over config details!!!
