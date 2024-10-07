@@ -7,7 +7,7 @@
 #include "esp_log.h"
 #include "esp_sntp.h"
 
-#include "task_priorities"
+#include "task_priorities.h"
 #include "lvgl_ui.h"
 
 #ifdef CONFIG_EXAMPLE_ENABLE_LCD
