@@ -25,8 +25,8 @@ namespace MyJsonNamespace {
       this->doc["power"] = heater_status.power;
       this->doc["energy"] = heater_status.energy;
       this->doc["pf"] = heater_status.pf;
-      this->doc["one_pwr"] = heater_status.one_on;
-      this->doc["two_pwr"] = heater_status.two_on;
+      this->doc["one_pwr"] = heater_status.one_gpio;
+      this->doc["two_pwr"] = heater_status.two_gpio;
       this->doc["safe"] = heater_status.safe;
       this->doc["blue"] = heater_status.blue;
       serializeJson(doc, this->json_string);

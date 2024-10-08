@@ -22,17 +22,6 @@ void heater_task() {
    xPreviousWakeTime = xTaskGetTickCount();
 
    do {
-      // Check for maximum temperature
-      if ( heater_status.fnt > MAX_TEMP || heater_status.bck > MAX_TEMP || heater_status.top > MAX_TEMP || heater_status.bot > MAX_TEMP || heater_status.chip > MAX_TEMP ) {
-         gpio_set_level( SSR_ONE_GPIO_PIN, 0 );
-         gpio_set_level( SSR_TWO_GPIO_PIN, 0 );
-         heater_status.safe = false;
-         heater_status.one_on = false;
-         heater_status.one_gpio = false;
-         heater_status.two_on = false;
-         heater_status.two_gpio = false;
-      }
-
       // Wait for the next cycle.
       xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );
 
@@ -45,21 +34,30 @@ void heater_task() {
       if ( heater_status.safe ) {
          if ( tick ) {
             tick = false;
-            if ( heater_status.one_gpio != heater_status.one_on ) {
+            if ( heater_status.one_on != heater_status.one_gpio ) {
                gpio_set_level( SSR_ONE_GPIO_PIN, heater_status.one_on );
-               heater_status.one_on = heater_status.one_gpio;
+               heater_status.one_gpio = gpio_get_level( SSR_ONE_GPIO_PIN );
+               if ( heater_status.one_on != heater_status.one_gpio ) {
+						heater_status.safe = false;
+                  ESP_LOGE( TAG, "GPIO for SSR 1 wrong level!" );
+               }
             }
          } else {
             tick = true;
-            if ( heater_status.two_gpio != heater_status.two_on ) {
-               heater_status.two_on = heater_status.two_gpio;
+            if ( heater_status.two_on != heater_status.two_gpio ) {
                gpio_set_level( SSR_TWO_GPIO_PIN, heater_status.two_on );
-               heater_status.two_on = heater_status.two_gpio;
+               heater_status.two_gpio = gpio_get_level( SSR_TWO_GPIO_PIN );
+               if ( heater_status.two_on != heater_status.two_gpio ) {
+						heater_status.safe = false;
+                  ESP_LOGE( TAG, "GPIO for SSR 2 wrong level!" );
+               }
             }
          }
       } else {
          gpio_set_level( SSR_ONE_GPIO_PIN, 0 );
          gpio_set_level( SSR_TWO_GPIO_PIN, 0 );
+		   heater_status.one_gpio = false;
+		   heater_status.two_gpio = false;
       }
    } while ( true );
 }
@@ -80,8 +78,8 @@ bool heater_task_start() {
 
    gpio_config_t io_conf = {};                 // zero-initialize the config structure
    io_conf.intr_type = GPIO_INTR_DISABLE;      // disable interrupt
-   io_conf.mode = GPIO_MODE_OUTPUT;            // set as output mode
-   io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL; // bit mask of the pins that you want to set, e.g. GPIO18/19
+   io_conf.mode = GPIO_MODE_INPUT_OUTPUT;      // set as output mode
+   io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL; // bit mask of the pins that you want to set
    io_conf.pull_down_en = 0;                   // disable pull-down mode
    io_conf.pull_up_en = 0;                     // disable pull-up mode
    ret = gpio_config( &io_conf );              // configure GPIO with the given settings

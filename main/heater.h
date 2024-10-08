@@ -15,9 +15,6 @@ extern "C" {
 
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<SSR_ONE_GPIO_PIN) | (1ULL<<SSR_TWO_GPIO_PIN))
 
-#define TARGET_DEFAULT 20.5
-#define MAX_TEMP 105.0
-
 struct heater_status {
 	float target;
 	float fnt;
