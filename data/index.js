@@ -1,9 +1,11 @@
 const indicator1 = document.getElementById("indicator1");
 const indicator2 = document.getElementById("indicator2");
 
+const inc2 = document.getElementById("increment2");
 const inc = document.getElementById("increment");
 const target = document.getElementById("input");
 const dec = document.getElementById("decrement");
+const dec2 = document.getElementById("decrement2");
 
 const te_rem = document.getElementById("te_rem");
 const te_fnt = document.getElementById("te_fnt");
@@ -95,15 +97,25 @@ function onLoad(event) {
 		 
 function initButtons() {
 	document.getElementById('decrement').addEventListener('click', decrement);
+	document.getElementById('decrement2').addEventListener('click', decrement2);
 	document.getElementById('increment').addEventListener('click', increment);
+	document.getElementById('increment2').addEventListener('click', increment2);
 }
 
 function decrement(){
 	websocket.send('D');
 }
 
+function decrement2(){
+	websocket.send('E');
+}
+
 function increment(){
 	websocket.send('U');
+}
+
+function increment2(){
+	websocket.send('V');
 }
 
 

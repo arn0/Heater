@@ -261,8 +261,20 @@ static esp_err_t get_ws_handler( httpd_req_t *req )
 				next_log_time = 0;		// send update immediately
 				break;
 
+			case 'E':
+				heater_status.target -= HEATER_WEB_STEP * 10;
+				heater_status.update = true;
+				next_log_time = 0;		// send update immediately
+				break;
+
 			case 'U':
 				heater_status.target += HEATER_WEB_STEP;
+				heater_status.update = true;
+				next_log_time = 0;		// send update immediately
+				break;
+			
+			case 'V':
+				heater_status.target += HEATER_WEB_STEP * 10;
 				heater_status.update = true;
 				next_log_time = 0;		// send update immediately
 				break;
