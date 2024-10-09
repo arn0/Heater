@@ -261,7 +261,7 @@ bool monitor_task_start() {
 	log_read();
 #endif
 
-	xTaskCreate( monitor_task, "monitor", 4096/2+512, NULL, MONITOR_TASK_PRIORITY, NULL );
+	xTaskCreate( monitor_task, "monitor", 4096, NULL, MONITOR_TASK_PRIORITY, NULL );
 
 	return(true);
 }
