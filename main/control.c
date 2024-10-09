@@ -101,7 +101,7 @@ void control_task() {
       if ( heater_status.blue ) {
          delta = heater_status.target - heater_status.rem;
       } else {
-         delta = heater_status.target - heater_status.fnt / 3.5; // Test this !!!
+         delta = 0;
       }
       // Check for maximum temperature
       if ( heater_status.fnt >= INTERNAL_MAX_TEMP || heater_status.bck >= MAX_TEMP || heater_status.top >= MAX_TEMP || heater_status.bot >= MAX_TEMP || heater_status.chip >= MAX_TEMP ) {
