@@ -54,7 +54,7 @@ time_t log_saved_time, log_update_time;
 time_t now, next_heap_time;
 
 int32_t start_pzem;
-#define WAIT_PZEM 15
+#define WAIT_PZEM 16
 
 void monitor_task() {
 	TickType_t xPreviousWakeTime;
@@ -93,64 +93,50 @@ void monitor_task() {
 
 		switch( step++ ) {
 			case 0:
-				// chip temperature reading
 				ESP_ERROR_CHECK( temperature_sensor_get_celsius( temp_sensor, &heater_status.chip ) );
-				break;
-
-				// ds18b20 temperature reading
-			case 1:
 				if ( t_sensor_fnt ) {
 					ESP_ERROR_CHECK( ds18b20_trigger_temperature_conversion( t_sensor_fnt ) );
 				}
 				break;
 
-			case 2:
+			case 1:
 				if ( t_sensor_fnt ) {
 					ESP_ERROR_CHECK( ds18b20_get_temperature( t_sensor_fnt, &heater_status.fnt ) );
 					ESP_LOGD( TAG, "fnt: %f", heater_status.fnt );
 				}
-				break;
-
-			case 3:
 				if ( t_sensor_bck ) {
 					ESP_ERROR_CHECK( ds18b20_trigger_temperature_conversion( t_sensor_bck ) );
 				}
 				break;
 
-			case 4:
+			case 2:
 				if ( t_sensor_bck ) {
 					ESP_ERROR_CHECK( ds18b20_get_temperature( t_sensor_bck, &heater_status.bck ) );
 					ESP_LOGD( TAG, "bck: %f", heater_status.bck );
 				}
-				break;
-
-			case 5:
 				if ( t_sensor_top ) {
 					ESP_ERROR_CHECK( ds18b20_trigger_temperature_conversion( t_sensor_top ) );
 				}
 				break;
 
-			case 6:
+			case 3:
 				if ( t_sensor_top ) {
 					ESP_ERROR_CHECK( ds18b20_get_temperature( t_sensor_top, &heater_status.top ));
 					ESP_LOGD( TAG, "top: %f", heater_status.top );
 				}
-				break;
-
-			case 7:
 				if ( t_sensor_bot ){
 					ESP_ERROR_CHECK( ds18b20_trigger_temperature_conversion( t_sensor_bot ) );
 				}
 				break;
 
-			case 8:
+			case 4:
 				if ( t_sensor_bot ) {
 					ESP_ERROR_CHECK( ds18b20_get_temperature( t_sensor_bot, &heater_status.bot ) );
 					ESP_LOGD( TAG, "bot: %f", heater_status.bot );
 				}
 				break;
 
-			case 9:
+			case 5:
 				time( &now );
 #ifdef ENABLE_LOG
 				if(now > log_update_time + 60){
@@ -163,8 +149,8 @@ void monitor_task() {
 				}
 #endif
 				if ( now > next_heap_time ) {
-					next_heap_time = now + 60*10;
-					heap_caps_print_heap_info( MALLOC_CAP_DEFAULT );		// Log heap memory every 10 minutes
+					next_heap_time = now + 60*60;
+					heap_caps_print_heap_info( MALLOC_CAP_DEFAULT );		// Log heap memory every 60 minutes
 				}
 				break;
 
