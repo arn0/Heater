@@ -78,7 +78,7 @@ function upload() {
 					document.write(xhttp.responseText);
 					document.close();
 				} else if (xhttp.status == 0) {
-					alert("Server closed the connection abruptly!");
+					//alert("Server closed the connection abruptly!");
 					location.reload()
 				} else {
 					alert(xhttp.status + " Error!\n" + xhttp.responseText);

@@ -25,6 +25,7 @@ const blue = document.getElementById("blue");
 const matt = document.getElementById("matt");
 
 const time = document.getElementById("time");
+const container = document.getElementById("container");
 
 var gateway = `ws://${window.location.hostname}/ws`;
 //var gateway = `ws://heater.local/ws`;
@@ -85,6 +86,7 @@ function onMessage(event) {
 	let text = d.toLocaleString();
 	time.textContent = text;
 	
+	retrieve();
 }
 
 window.addEventListener('load', onLoad);
@@ -151,7 +153,7 @@ function getObjectStore(store_name, mode) {
 }
 
 function addSnapshot(obj) {
-	console.log("addSnapshot arguments:", arguments);
+//	console.log("addSnapshot arguments:", arguments);
 
 	var store = getObjectStore(DB_STORE_NAME, 'readwrite');
 	var req;
@@ -165,25 +167,75 @@ function addSnapshot(obj) {
 		throw e;
 	}
 	req.onsuccess = function (evt) {
-		console.log("Insertion in DB successful");
+//		console.log("Insertion in DB successful");
 	};
 	req.onerror = function() {
 		console.error("addSnapshot error", this.error);
 	};
 }
 
-function retrieve24hr(){
-	var history;
-	const now = getTimestampInSeconds();
-	var search = now - 24*60*60;
-	var searching = true;
+const plot = [];
 
-	while(search < now){
-		while(searching){
+function retrieve(){
+//	console.log("Retieve data");
+	const high = getTimestampInSeconds();
+	const low = high - 3*60 // 24*60*60;
+	const boundKeyRange = IDBKeyRange.bound(low, high, false, true);
+//	console.log("boundKeyRange", boundKeyRange);
 
+	const transaction = db.transaction([DB_STORE_NAME], "readonly");
+	const objectStore = transaction.objectStore(DB_STORE_NAME);
+ 
+	objectStore.openCursor(boundKeyRange).onsuccess = (event) => {
+		const cursor = event.target.result;
+		var record;
+		if (cursor) {
+//			plot.push(cursor.value);
+			record = cursor.value;
+			delete record.target;
+			delete record.fnt;
+			delete record.bck;
+			delete record.top;
+			delete record.bot;
+			delete record.chip;
+			delete record.voltage;
+			delete record.current;
+			delete record.power;
+			delete record.energy;
+			delete record.pf;
+			delete record.one_pwr;
+//			delete record.safe;
+			delete record.pf;
+			delete record.blue;
+			plot.push(record);
+			cursor.continue();
 		}
-	}
+//		console.log(record);
+//		console.log(record.time);
+//		console.log(record.rem);
+//		delete record.fnt;
+//		delete record.bck;
+//		delete record.top;
+//		delete record.bot;
+//		delete record.chip;
+//		delete record.voltage;
+//		delete record.current;
+//		delete record.power;
+//		delete record.energy;
+//		delete record.pf;
+//		delete record.one_pwr;
+//		delete record two_pwr;
+//		delete record.safe;
+//		delete record.pf;
+//		delete record.blue;
+//		console.log(record);
+//		plot.push(record);
 }
+	console.log("plot", plot);
+//	updateData()
+}
+
+
 
 function getTimestampInSeconds () {
   return Math.floor(Date.now() / 1000)

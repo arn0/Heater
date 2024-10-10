@@ -1,16 +1,13 @@
-<!doctype html>
-<html>
-
+<!DOCTYPE html>
 <head>
- <meta charset="UTF-8">
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>Radiator</title>
- <script src="index.js" type="module" defer="defer"></script>
- <link rel="stylesheet" type="text/css" href="index.css">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Radiator</title>
+	<link rel="stylesheet" href="./styles.css" type="text/css" media="screen" charset="utf-8">
+	<script src="https://d3js.org/d3.v5.min.js"></script>
 </head>
-
 <body>
-  <div>
+	<div>
     <h1>Radiator</h1>
     <div class="indicators">
       <div id="indicator1" class="indicator-off">I</div>
@@ -50,5 +47,32 @@
       <div>Last update:&nbsp;</div>
       <div id="time"">-</div>
     </div>
+    <div id="container"></div>
   </div>
-</html>
+
+	<div class="flex-container">
+		<div class="flex-item">
+			<div>
+				<select id="select-stock">
+					<option selected="selected" value="vig">VIG</option>
+					<option value="vti"VTI</option>
+					<option value="vea">VEA</option>
+				</select>
+			</div>
+			<div>
+				<div class="item">
+					<input type="checkbox" id="close" checked>
+					<label for="close">Close Price</label>
+				</div>
+			</div>
+		</div>
+		<div class="flex-item">
+			<div id="chart"></div>
+		</div>
+	</div>
+	<script src="chart.js"></script>
+	<script>
+	chart = new HistoricalPriceChart();
+	</script>
+
+</body>
