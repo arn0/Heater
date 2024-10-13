@@ -21,8 +21,8 @@
 #define LCD_BACKLIGHT_GPIO_PIN	GPIO_NUM_NC			// reseved for backlight led control
 
 // switch GPIO
-#define TOUCH_TEMP_UP_GPIO_PIN	GPIO_NUM_36
-#define TOUCH_TEMP_DN_GPIO_PIN	GPIO_NUM_39
+#define TOUCH_TEMP_UP_GPIO_PIN	GPIO_NUM_NC
+#define TOUCH_TEMP_DN_GPIO_PIN	GPIO_NUM_NC
 
 // sound
 #define SOUND_OUT_GPIO_PIN			GPIO_NUM_NC
