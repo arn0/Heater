@@ -26,6 +26,12 @@ typedef struct pz_conf_t {
     uint8_t addr;
 } pzem_setup_t;
 
+/*
+PZEM-004T-100A-D-P(V1.0)
+Has a pulse output and pulse indicator led
+1600 imp/kwh
+*/
+
 /***
  * https://en.wikipedia.org/wiki/AC_power
 */
