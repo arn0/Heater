@@ -86,7 +86,7 @@ function onMessage(event) {
 	let text = d.toLocaleString();
 	time.textContent = text;
 	
-	retrieve();
+//	retrieve();
 }
 
 window.addEventListener('load', onLoad);

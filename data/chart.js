@@ -1,4 +1,4 @@
-class HistoricalPriceChart {
+class HistoricalChart {
   constructor() {
     this.margin;
     this.width;
@@ -7,8 +7,8 @@ class HistoricalPriceChart {
     this.yscale;
     this.zoom;
     this.currentData = [];
-    this.loadData('vig').then(data => {this.initialiseChart(data);});
-//    this.initialiseChart(plot);
+    //this.loadData('vig').then(data => { this.initialiseChart(data); });
+    this.initialiseChart(plot);
 
     const selectElement = document.getElementById('select-stock');
     selectElement.addEventListener('change', event => {
@@ -49,20 +49,17 @@ class HistoricalPriceChart {
   }
 
   initialiseChart(data) {
-    const thisYearStartDate = new Date(2018, 4, 31);
-    const nextYearStartDate = new Date(2019, 0, 1);
-    // remove invalid data points
-    const validData = data['quote'].filter(row => row['high'] && row['low'] && row['close'] && row['open']
-    );
+    const nextYearStartDate = new Date();
+    const thisYearStartDate = new Date(nextYearStartDate.getTime()-24*60*60*1000);
 
-    console.log(data);
-    console.log(data['quote']);
+// remove invalid data points
+    const validData = data.filter(row => row['time'] && row['rem']);
 
     // filter out data based on time period
     this.currentData = validData.filter(row => {
-      if (row['date']) {
+      if (row['time']) {
         return (
-          row['date'] >= thisYearStartDate && row['date'] < nextYearStartDate
+          row['time'] >= thisYearStartDate.getTime() && row['time'] < nextYearStartDate.getTime()
         );
       }
     });
@@ -75,20 +72,20 @@ class HistoricalPriceChart {
       document.documentElement.clientHeight,
       window.innerHeight
     );
-    this.margin = { top: 20, right: 20, bottom: 20, left: 20 };
+    this.margin = { top: 20, right: 40, bottom: 20, left: 40 };
     if (viewportWidth <= 768) {
       this.width = viewportWidth - this.margin.left - this.margin.right; // Use the window's width
-      this.height = 0.5 * viewportHeight - this.margin.top - this.margin.bottom; // Use the window's height
+      this.height = 0.7 * viewportHeight - this.margin.top - this.margin.bottom; // Use the window's height
     } else {
       this.width = viewportWidth - this.margin.left - this.margin.right;
       this.height = 0.75 * viewportHeight - this.margin.top - this.margin.bottom; // Use the window's height
     }
 
     // find data range
-    const xMin = d3.min(this.currentData, d => d['date']);
-    const xMax = d3.max(this.currentData, d => d['date']);
-    const yMin = d3.min(this.currentData, d => d['close']);
-    const yMax = d3.max(this.currentData, d => d['close']);
+    const xMin = d3.min(this.currentData, d => d['time']);
+    const xMax = d3.max(this.currentData, d => d['time']);
+    const yMin = d3.min(this.currentData, d => d['rem']);
+    const yMax = d3.max(this.currentData, d => d['rem']);
 
     // scale using range
     this.xScale = d3
@@ -194,8 +191,8 @@ class HistoricalPriceChart {
       const updatedXScale = d3.event.transform.rescaleX(this.xScale);
       const updatedYScale = d3.event.transform.rescaleY(this.yScale);
       // update axes
-      const xMin = d3.min(this.currentData, d => d['date']);
-      const xMax = d3.max(this.currentData, d => d['date']);
+      const xMin = d3.min(this.currentData, d => d['time']);
+      const xMax = d3.max(this.currentData, d => d['time']);
       const xRescale = d3
         .scaleTime()
         .domain([xMin, xMax])
@@ -206,13 +203,13 @@ class HistoricalPriceChart {
       // update close price and moving average lines based on zoom/pan
       const updateClosePriceChartPlot = d3
         .line()
-        .x(d => updatedXScale(d['date']))
-        .y(d => updatedYScale(d['close']));
+        .x(d => updatedXScale(d['time']))
+        .y(d => updatedYScale(d['rem']));
 
       d3.select('.price-chart').attr('d', updateClosePriceChartPlot);
 
       // update volume series based on zoom/pan
-      d3.selectAll('.vol').attr('x', d => updatedXScale(d['date']));
+      d3.selectAll('.vol').attr('x', d => updatedXScale(d['time']));
 
       // update crosshair position on zooming/panning
       const overlay = d3.select('.overlay');
@@ -242,12 +239,12 @@ class HistoricalPriceChart {
           const d0 = this.currentData[i1 - 1];
           const d1 = this.currentData[i1];
           const currentPoint =
-            correspondingDate - d0['date'] > d1['date'] - correspondingDate
+            correspondingDate - d0['time'] > d1['time'] - correspondingDate
               ? d1
               : d0;
           focus.attr(
             'transform',
-            `translate(${updatedXScale(currentPoint['date'])}, ${updatedYScale(
+            `translate(${updatedXScale(currentPoint['time'])}, ${updatedYScale(
               currentPoint['close']
             )})`
           );
@@ -255,7 +252,7 @@ class HistoricalPriceChart {
           focus
             .select('line.x')
             .attr('x1', 0)
-            .attr('x2', this.width - updatedXScale(currentPoint['date']))
+            .attr('x2', this.width - updatedXScale(currentPoint['time']))
             .attr('y1', 0)
             .attr('y2', 0);
 
@@ -264,62 +261,73 @@ class HistoricalPriceChart {
             .attr('x1', 0)
             .attr('x2', 0)
             .attr('y1', 0)
-            .attr('y2', this.height - updatedYScale(currentPoint['close']));
+            .attr('y2', this.height - updatedYScale(currentPoint['rem']));
 
           this.updateLegends(currentPoint);
-          this.updateSecondaryLegends(currentPoint['date']);
+          this.updateSecondaryLegends(currentPoint['time']);
         });
     }
   }
 
-  setDataset(event) {
-    console.log(event);
-    this.loadData(event.target.value).then(response => {
-      const thisYearStartDate = new Date(2018, 4, 31);
-      const nextYearStartDate = new Date(2019, 0, 1);
-      // remove invalid data points
-      const validData = response['quote'].filter(
-        row => row['high'] && row['low'] && row['close'] && row['open']
-      );
 
-      this.currentData = validData.filter(row => {
-        if (row['date']) {
-          return (
-            row['date'] >= thisYearStartDate && row['date'] < nextYearStartDate
-          );
+  // Start of update
+  
+  setDataset(event) {
+      this.loadData("vig").then(response => {
+
+        const nextYearStartDate = new Date();
+        const thisYearStartDate = new Date(nextYearStartDate.getTime()-24*60*60*1000);
+
+        //console.log("setDataset:")
+        //console.log(plot);
+
+        // remove invalid data points
+        const validData = plot.filter(row => row['time'] && row['rem']);
+
+        this.currentData = validData.filter(row => {
+          if (row['time']) {
+            return (
+              row['time'] >= thisYearStartDate.getTime() && row['time'] < nextYearStartDate.getTime()
+            );
+          }
+        });
+
+        //console.log(validData);
+
+
+        const viewportWidth = Math.max(
+          document.documentElement.clientWidth,
+          window.innerWidth
+        );
+        const viewportHeight = Math.max(
+          document.documentElement.clientHeight,
+          window.innerHeight
+        );
+        if (viewportWidth <= 768) {
+          this.width = viewportWidth - this.margin.left - this.margin.right; // Use the window's width
+          this.height =
+            0.5 * viewportHeight - this.margin.top - this.margin.bottom; // Use the window's height
+        } else {
+          this.width =
+            0.75 * viewportWidth - this.margin.left - this.margin.right;
+          this.height = viewportHeight - this.margin.top - this.margin.bottom; // Use the window's height
         }
+
+        /* update the min, max values, and scales for the axes */
+        const xMin = d3.min(this.currentData, d => Math.min(d['time']));
+        const xMax = d3.max(this.currentData, d => Math.max(d['time']));
+        const yMin = d3.min(this.currentData, d => Math.min(d['rem']));
+        const yMax = d3.max(this.currentData, d => Math.max(d['rem']));
+
+        //console.log("xMin xMax yMin yMax", xMin, xMax, yMin, yMax);
+
+        this.xScale.domain([xMin, xMax]);
+        this.yScale.domain([yMin - 5, yMax + 4]);
+
+        this.updateChart();
       });
 
-      const viewportWidth = Math.max(
-        document.documentElement.clientWidth,
-        window.innerWidth
-      );
-      const viewportHeight = Math.max(
-        document.documentElement.clientHeight,
-        window.innerHeight
-      );
-      if (viewportWidth <= 768) {
-        this.width = viewportWidth - this.margin.left - this.margin.right; // Use the window's width
-        this.height =
-          0.5 * viewportHeight - this.margin.top - this.margin.bottom; // Use the window's height
-      } else {
-        this.width =
-          0.75 * viewportWidth - this.margin.left - this.margin.right;
-        this.height = viewportHeight - this.margin.top - this.margin.bottom; // Use the window's height
-      }
-
-      /* update the min, max values, and scales for the axes */
-      const xMin = d3.min(this.currentData, d => Math.min(d['date']));
-      const xMax = d3.max(this.currentData, d => Math.max(d['date']));
-      const yMin = d3.min(this.currentData, d => Math.min(d['close']));
-      const yMax = d3.max(this.currentData, d => Math.max(d['close']));
-
-      this.xScale.domain([xMin, xMax]);
-      this.yScale.domain([yMin - 5, yMax + 4]);
-
-      this.updateChart();
-    });
-  }
+    }
 
   updateChart() {
     /* Update the axes */
@@ -330,12 +338,12 @@ class HistoricalPriceChart {
     this.updateCrosshairProperties();
 
     /* Update the volume series bar chart */
-    this.renderVolumeBarCharts();
+//    this.renderVolumeBarCharts();
 
     /* Update the price chart */
-    const closeCheckboxToggle = document.querySelector('input[id=close]')
-      .checked;
-    this.toggleClose(closeCheckboxToggle);
+//  const closeCheckboxToggle = document.querySelector('input[id=close]')
+//    .checked;
+    this.toggleClose(true);
   }
 
   /* Mouseover function to generate crosshair */
@@ -349,11 +357,11 @@ class HistoricalPriceChart {
     const d0 = this.currentData[i - 1];
     const d1 = this.currentData[i];
     const currentPoint =
-      correspondingDate - d0['date'] > d1['date'] - correspondingDate ? d1 : d0;
+      correspondingDate - d0['time'] > d1['time'] - correspondingDate ? d1 : d0;
     focus.attr(
       'transform',
-      `translate(${this.xScale(currentPoint['date'])}, ${this.yScale(
-        currentPoint['close']
+      `translate(${this.xScale(currentPoint['time'])}, ${this.yScale(
+        currentPoint['rem']
       )})`
     );
 
@@ -372,7 +380,7 @@ class HistoricalPriceChart {
       .attr('y2', this.height - this.yScale(currentPoint['close']));
 
     // updates the legend to display the date, open, close, high, low, and volume and selected mouseover area
-    this.updateLegends(currentPoint);
+    //this.updateLegends(currentPoint);
   }
 
   updateLegends(currentPoint) {
@@ -391,7 +399,7 @@ class HistoricalPriceChart {
           .attr('transform', (d, i) => `translate(0, ${i * 20})`)
           .append('text')
           .text(d => {
-            if (d === 'date') {
+            if (d === 'time') {
               return `${d}: ${currentPoint[d].toLocaleDateString()}`;
             } else if (
               d === 'high' ||
@@ -428,7 +436,7 @@ class HistoricalPriceChart {
             .attr('class', 'secondary-legend')
             .attr('transform', (d, i) => `translate(0, ${i * 20})`)
             .append('text')
-            .text(d => {})
+            .text(d => { })
             .style('font-size', '0.8em')
             .style('fill', 'white')
             .attr('transform', 'translate(150,9)'),
@@ -459,7 +467,7 @@ class HistoricalPriceChart {
       .attr('height', this.height)
       .on('mouseover', () => focus.style('display', null))
       .on('mouseout', () => focus.style('display', 'none'))
-      .on('mousemove', (d, i, nodes) => this.generateCrosshair(nodes[i]));
+//    .on('mousemove', (d, i, nodes) => this.generateCrosshair(nodes[i]));
   }
 
   renderVolumeBarCharts() {
@@ -530,8 +538,8 @@ class HistoricalPriceChart {
 
       const line = d3
         .line()
-        .x(d => this.xScale(d['date']))
-        .y(d => this.yScale(d['close']));
+        .x(d => this.xScale(d['time']))
+        .y(d => this.yScale(d['rem']));
       const lineSelect = d3
         .select('#chart')
         .select('svg')
@@ -546,14 +554,14 @@ class HistoricalPriceChart {
             .style('fill', 'none')
             .attr('class', 'price-chart')
             .attr('clip-path', 'url(#clip)')
-            .attr('stroke', 'steelblue')
-            .attr('stroke-width', '1.5')
-            .attr('d', line),
-        update =>
-          update
-            .transition()
-            .duration(750)
-            .attr('d', line)
+             .attr('stroke', 'steelblue')
+             .attr('stroke-width', '1.5')
+             .attr('d', line),
+         update =>
+           update
+             //.transition()
+             //.duration(750)
+             .attr('d', line)
       );
     } else {
       // Remove close price chart
@@ -572,35 +580,40 @@ var gateway = `ws://${window.location.hostname}/ws`;
 var websocket;
 var update;
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function initWebSocket() {
-	console.log('Trying to open a WebSocket connection...');
-	websocket = new WebSocket(gateway);
-	websocket.onopen    = onOpen;
-	websocket.onclose   = onClose;
-	websocket.onmessage = onMessage;
+  console.log('Trying to open a WebSocket connection...');
+  websocket = new WebSocket(gateway);
+  websocket.onopen = onOpen;
+  websocket.onclose = onClose;
+  websocket.onmessage = onMessage;
 }
 
 function onOpen(event) {
-	console.log('Connection opened');
+  console.log('Connection opened');
 }
 
 function onClose(event) {
-	console.log('Connection closed');
-	setTimeout(initWebSocket, 2000);
+  console.log('Connection closed');
+  setTimeout(initWebSocket, 2000);
 }
 
 function onMessage(event) {
-	update = JSON.parse(event.data);
-	addSnapshot(update);
-	console.log(event.data);
-	retrieve();
+  update = JSON.parse(event.data);
+  addSnapshot(update);
+//console.log(event.data);
+  retrieve();
 }
 
 window.addEventListener('load', onLoad);
 
 function onLoad(event) {
-	initWebSocket();
-	openDb();
+  initWebSocket();
+  openDb();
+  sleep(1000).then(() => { retrieve(); });
 }
 
 const DB_NAME = 'Snapshots';
@@ -610,77 +623,91 @@ const DB_STORE_NAME = 'snapshots';
 var db;
 
 function openDb() {
-	console.log("openDb ...");
-	var request = indexedDB.open(DB_NAME, DB_VERSION);
+  console.log("openDb ...");
+  var request = indexedDB.open(DB_NAME, DB_VERSION);
 
-	request.onsuccess = function (evt) {
-		// Equal to: db = request.result;
-		db = this.result;
-		console.log("openDb DONE");
-	};
+  request.onsuccess = function (evt) {
+    // Equal to: db = request.result;
+    db = this.result;
+    console.log("openDb DONE");
+  };
 
-	request.onerror = function (evt) {
-		console.error("openDb:", evt.target.errorCode);
-	};
+  request.onerror = function (evt) {
+    console.error("openDb:", evt.target.errorCode);
+  };
 
-	request.onupgradeneeded = function (evt) {
-		console.log("openDb.onupgradeneeded");
-		var store = evt.currentTarget.result.createObjectStore(DB_STORE_NAME, { keyPath: 'time'});
-	};
+  request.onupgradeneeded = function (evt) {
+    console.log("openDb.onupgradeneeded");
+    var store = evt.currentTarget.result.createObjectStore(DB_STORE_NAME, { keyPath: 'time' });
+  };
 }
 
 function getObjectStore(store_name, mode) {
-	var tx = db.transaction(store_name, mode);
-	return tx.objectStore(store_name);
+  var tx = db.transaction(store_name, mode);
+  return tx.objectStore(store_name);
 }
 
 function addSnapshot(obj) {
-  	console.log("addSnapshot arguments:", arguments);
-  
-    var store = getObjectStore(DB_STORE_NAME, 'readwrite');
-    var req;
-  
-    try {
-      req = store.add(obj);
-    } catch (e) {
-      if (e.name == 'DataCloneError')
-        displayActionFailure("This engine doesn't know how to clone a Blob, " +
-                             "use Firefox");
-      throw e;
-    }
-    req.onsuccess = function (evt) {
-  	console.log("Insertion in DB successful");
-    };
-    req.onerror = function() {
-      console.error("addSnapshot error", this.error);
-    };
-  }
-  
-const plot = [];
+//console.log("addSnapshot arguments:", arguments);
 
-function retrieve(){
-//	console.log("Retieve data");
-	const high = getTimestampInSeconds();
-	const low = high - 3*60 // 24*60*60;
-	const boundKeyRange = IDBKeyRange.bound(low, high, false, true);
-//	console.log("boundKeyRange", boundKeyRange);
+  var store = getObjectStore(DB_STORE_NAME, 'readwrite');
+  var req;
 
-	const transaction = db.transaction([DB_STORE_NAME], "readonly");
-	const objectStore = transaction.objectStore(DB_STORE_NAME);
- 
-	objectStore.openCursor(boundKeyRange).onsuccess = (event) => {
-		const cursor = event.target.result;
-		var record;
-		if (cursor) {
-			record = cursor.value;
-			plot.push(record);
-			cursor.continue();
-		}
+  try {
+    req = store.add(obj);
+  } catch (e) {
+    if (e.name == 'DataCloneError')
+      displayActionFailure("This engine doesn't know how to clone a Blob, " +
+        "use Firefox");
+    throw e;
   }
-	console.log("plot", plot);
-//	updateData()
+  req.onsuccess = function (evt) {
+//  console.log("Insertion in DB successful");
+  };
+  req.onerror = function () {
+    console.error("addSnapshot error", this.error);
+  };
 }
 
-function getTimestampInSeconds () {
+let plot = [];
+
+function retrieve() {
+  const high = getTimestampInSeconds();
+  const low = high - 24*60*60;
+  const boundKeyRange = IDBKeyRange.bound(low, high, false, true);
+//console.log("boundKeyRange", boundKeyRange);
+
+  const transaction = db.transaction([DB_STORE_NAME], "readonly");
+  const objectStore = transaction.objectStore(DB_STORE_NAME);
+
+  objectStore.openCursor(boundKeyRange).onsuccess = (event) => {
+    const cursor = event.target.result;
+    var record;
+    if (cursor) {
+      record = cursor.value;
+      record.time *= 1000;
+      if( plot.length == 0 ) {
+        plot.push(record);
+      } else {
+        let temp = plot.slice( -1 );
+//      console.log( "temp", temp );
+//      console.log( "temp[0].time", temp[0].time );
+//      console.log( "record.time", record.time );
+
+        if( temp[0].time < record.time ) {
+//        console.log( "temp[0].time < record.time", temp[0].time < record.time );
+          plot.push(record);
+        }
+      }
+    cursor.continue();
+    }
+  }
+//console.log("plot", plot);
+
+  chart.setDataset(0);
+  //	updateData()
+}
+
+function getTimestampInSeconds() {
   return Math.floor(Date.now() / 1000)
 }

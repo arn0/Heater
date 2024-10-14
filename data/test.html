@@ -8,45 +8,6 @@
 </head>
 <body>
 	<div>
-    <h1>Radiator</h1>
-    <div class="indicators">
-      <div id="indicator1" class="indicator-off">I</div>
-      <div id="indicator2" class="indicator-off">II</div>
-    </div>
-    <h2>Temperatuur</h2>
-    <div class="buttons">
-      <button id="decrement2">-</button>
-      <button id="decrement">-</button>
-      <button id="input" style="min-width:100px;">--.-</button>
-      <button id="increment">+</button>
-      <button id="increment2">+</button>
-    </div>
-    <div class="datarow">
-      <div>remote<br><div id="te_rem">--.-</div></div>
-      <div>voor<br><div id="te_fnt">--.-</div></div>
-      <div>achter<br><div id="te_bck">--.-</div></div>
-      <div>boven<br><div id="te_top">--.-</div></div>
-      <div>onder<br><div id="te_bot">--.-</div></div>
-      <div>chip<br><div id="te_chp">--.-</div></div>
-    </div>
-    <h2>Data</h2>
-    <div class="datarow">
-      <div>V<br><div id="volt">---.-</div></div>
-      <div>A<br><div id="amp">-.-</div></div>
-      <div>W<br><div id="watt">----.-</div></div>
-      <div>kWh<br><div id="kwh">----.-</div></div>
-      <div>PF<br><div id="pf">-.---</div></div>
-    </div>
-    <div class="icons">
-      <div id="wifi" class="icon icon-wifi"></div>
-      <div id="blue" class="icon icon-bluetooth"></div>
-      <div id="matt" class="icon icon-matter"></div>
-      <a href="tools.html"><div id="tool" class="icon icon-tools"></div></a>
-    </div>
-    <div class="timerow">
-      <div>Last update:&nbsp;</div>
-      <div id="time"">-</div>
-    </div>
     <div id="container"></div>
   </div>
 
@@ -55,7 +16,7 @@
 			<div>
 				<select id="select-stock">
 					<option selected="selected" value="vig">VIG</option>
-					<option value="vti"VTI</option>
+					<option value="vti">VTI</option>
 					<option value="vea">VEA</option>
 				</select>
 			</div>
@@ -66,13 +27,16 @@
 				</div>
 			</div>
 		</div>
+  </div>
+
+	<div class="flex-container">
 		<div class="flex-item">
 			<div id="chart"></div>
 		</div>
 	</div>
 	<script src="chart.js"></script>
 	<script>
-	chart = new HistoricalPriceChart();
+	chart = new HistoricalChart();
 	</script>
 
 </body>
