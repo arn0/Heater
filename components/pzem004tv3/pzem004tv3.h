@@ -20,10 +20,10 @@ extern "C" {
 #define UPDATE_TIME      200
 
 typedef struct pz_conf_t {
-    uart_port_t pzem_uart;
-    uint8_t pzem_rx_pin;
-    uint8_t pzem_tx_pin;
-    uint8_t pzem_addr;
+    uart_port_t uart;
+    uint8_t rx_pin;
+    uint8_t tx_pin;
+    uint8_t addr;
 } pzem_setup_t;
 
 /***

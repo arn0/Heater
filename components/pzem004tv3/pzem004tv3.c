@@ -8,23 +8,21 @@
 /* Declare static func in .c file (linker warnings) */
 static uint16_t crc16(const uint8_t *data, uint16_t len);
 
+#define UART_BUFFER_SIZE 4*128
+
 uint16_t _lastRead = 0; /* Last time values were updated */
 
 /**
  * @brief Initialize the UART, configured via struct pzemSetup_t
  * @param pzSetup
  */
+
 void PzemInit( pzem_setup_t *pzSetup )
 {
     static const char *LOG_TAG = "PZ_INIT";
 
     ESP_LOGI( LOG_TAG, "Initializing UART" );
 
-    const uart_port_t _uart_num = pzSetup->pzem_uart;
-    const int uart_buffer_size = ( 1024 * 2 );
-
-    /* Configure parameters of an UART driver,
-     * communication pins and install the driver */
     uart_config_t uart_config = {
         .baud_rate  = PZ_BAUD_RATE,
         .data_bits  = UART_DATA_8_BITS,
@@ -34,26 +32,16 @@ void PzemInit( pzem_setup_t *pzSetup )
         .source_clk = UART_SCLK_DEFAULT,
     };
 
-    int intr_alloc_flags = 0;
-
-#if CONFIG_UART_ISR_IN_IRAM
-    intr_alloc_flags = ESP_INTR_FLAG_IRAM;
-#endif
-#if CONFIG_UART_MORE_PRIO
-    intr_alloc_flags = ESP_INTR_FLAG_LEVEL3;
-#endif
-
     ESP_LOGI( LOG_TAG, "UART set pins, mode and install driver." );
 
-    /* Install UART driver using an event queue here */
-    ESP_ERROR_CHECK( uart_driver_install( _uart_num, uart_buffer_size, 0, 0, NULL, intr_alloc_flags ) );
+    /* Install UART driver */
+    ESP_ERROR_CHECK( uart_driver_install( pzSetup->uart, UART_BUFFER_SIZE, 0, 0, NULL, 0 ) );
 
     /* Configure UART parameters */
-    ESP_ERROR_CHECK( uart_param_config( _uart_num, &uart_config ) );
+    ESP_ERROR_CHECK( uart_param_config( pzSetup->uart, &uart_config ) );
 
     /* Set UART pins(TX: , RX: , RTS: -1, CTS: -1) */
-    ESP_ERROR_CHECK( uart_set_pin( _uart_num, pzSetup->pzem_tx_pin, pzSetup->pzem_rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE ) );
-
+    ESP_ERROR_CHECK( uart_set_pin( pzSetup->uart, pzSetup->tx_pin, pzSetup->rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE ) );
 }
 
 
@@ -64,19 +52,28 @@ void PzemInit( pzem_setup_t *pzSetup )
  * @param len
  * @return uint16_t
  */
+
 uint16_t PzemReceive( pzem_setup_t *pzSetup, uint8_t *resp, uint16_t len )
 {
     static const char *LOG_TAG = "PzemReceive";
 
-    /* Configure a temporary buffer for the incoming data */
-    uint16_t rxBytes = uart_read_bytes( pzSetup->pzem_uart, resp, len, pdMS_TO_TICKS( PZ_READ_TIMEOUT ) );
+//    size_t i;
+//    uart_get_buffered_data_len( pzSetup->uart, &i );
+//    if( len != i ) {
+//        ESP_LOGI( LOG_TAG, "%d  bytes in rx buffer", i );
+//        ESP_LOG_BUFFER_HEXDUMP( LOG_TAG, resp, i, ESP_LOG_INFO );
+//        uart_flush_input( pzSetup->uart );
+//        return 0;
+//    }
+    int rxBytes = uart_read_bytes( pzSetup->uart, resp, len, pdMS_TO_TICKS( PZ_READ_TIMEOUT*4 ) );
 
     if ( rxBytes > 0 ) {
-        resp[ rxBytes ] = 0;
-        ESP_LOGD( LOG_TAG, "Read %d  bytes: '%s'", rxBytes, resp );
-        ESP_LOG_BUFFER_HEXDUMP( LOG_TAG, resp, rxBytes, ESP_LOG_DEBUG );
+//      resp[ rxBytes ] = 0;
+        ESP_LOGI( LOG_TAG, "Read %d  bytes'", rxBytes );
+        ESP_LOG_BUFFER_HEXDUMP( LOG_TAG, resp, rxBytes, ESP_LOG_INFO );
+    } else {
+        ESP_LOGI( LOG_TAG, "Read %d  bytes'", rxBytes );
     }
-
     return rxBytes;
 }
 
@@ -88,9 +85,7 @@ uint16_t PzemReceive( pzem_setup_t *pzSetup, uint8_t *resp, uint16_t len )
  */
 uint8_t PzReadAddress( pzem_setup_t *pzSetup)
 {
-    static uint8_t response[ 7 ] = {0};
-    memset(response, 0, sizeof(response));
-
+    uint8_t response[ 32 ];
     uint8_t addr = 0;
 
     /* Read 1 register */
@@ -98,7 +93,7 @@ uint8_t PzReadAddress( pzem_setup_t *pzSetup)
         return INVALID_ADDRESS;
     }
 
-    if ( PzemReceive( pzSetup, response, 7 ) != 7 ) { /* Something went wrong */
+    if ( PzemReceive( pzSetup, response, 8 ) != 7 ) { /* Something went wrong */
         return INVALID_ADDRESS;
     }
 
@@ -123,7 +118,7 @@ bool PzSetAddress(pzem_setup_t *pzSetup, uint8_t new_addr)
         return false;
     }
 
-    if (pzSetup->pzem_addr  == new_addr) {
+    if (pzSetup->addr  == new_addr) {
         ESP_LOGW(LOG_TAG, "New address is the same as the old address");
         return false;
     }
@@ -146,19 +141,16 @@ bool PzResetEnergy( pzem_setup_t *pzSetup )
 {
     static const char *LOG_TAG = "PZ_RESET_ENERGY";
     uint8_t buffer[4] = {0};
-    uint8_t reply[5] = {0};
+    uint8_t reply[8] = {0};
 
-    memset(buffer, 0, sizeof(buffer));
-    memset(reply, 0, sizeof(reply));
-
-    buffer[ 0 ] = pzSetup->pzem_addr;
+    buffer[ 0 ] = pzSetup->addr;
     buffer[ 1 ] = 0x00;
     buffer[ 2 ] = CMD_REST;
     buffer[ 3 ] = 0x00;
     buffer[ 4 ] = 0x00;
 
     (void)PzemSetCRC( buffer, 4 );
-    if (uart_write_bytes( pzSetup->pzem_uart, buffer, 4 ) == -1) {
+    if (uart_write_bytes( pzSetup->uart, buffer, 4 ) == -1) {
         ESP_LOGE(LOG_TAG, "Failed to write to sensor/UART !!");
     }
 
@@ -186,16 +178,13 @@ bool PzemSendCmd8( pzem_setup_t *pzSetup, uint8_t cmd, uint16_t regAddr, uint16_
     static const char *LOG_TAG = "PZ_SEND8";
 
     /* send and receive buffers memory allocation */
-    uint8_t txdata[TX_BUF_SIZE] = {0};
-    uint8_t rxdata[RX_BUF_SIZE] = {0};
-
-    memset(txdata, 0, sizeof(txdata));
-    memset(rxdata, 0, sizeof(rxdata));
+    uint8_t txdata[TX_BUF_SIZE*2] = {0};
+    uint8_t rxdata[RX_BUF_SIZE*2] = {0};
 
     if ( ( slave_addr == 0xFFFF ) ||
             ( slave_addr < 0x01 ) ||
             ( slave_addr > 0xF7 ) ) {
-        slave_addr = pzSetup->pzem_addr;
+        slave_addr = pzSetup->addr;
     }
 
     txdata[ 0 ] = slave_addr;
@@ -208,10 +197,10 @@ bool PzemSendCmd8( pzem_setup_t *pzSetup, uint8_t cmd, uint16_t regAddr, uint16_
     /* Add CRC to array */
     (void)PzemSetCRC( txdata, TX_BUF_SIZE );
 
-    const int txBytes = uart_write_bytes( pzSetup->pzem_uart, txdata, TX_BUF_SIZE );
+    int txBytes = uart_write_bytes( pzSetup->uart, txdata, TX_BUF_SIZE );
 
-    ESP_LOGV( LOG_TAG, "Wrote %d bytes", txBytes );
-    ESP_LOG_BUFFER_HEXDUMP( LOG_TAG, txdata, txBytes, ESP_LOG_VERBOSE );
+    ESP_LOGI( LOG_TAG, "Wrote %d bytes", txBytes );
+    ESP_LOG_BUFFER_HEXDUMP( LOG_TAG, txdata, txBytes, ESP_LOG_INFO );
 
     if ( check ) {
         if ( !PzemReceive( pzSetup, rxdata, RX_BUF_SIZE ) ) { /* if check enabled, read the response */
@@ -225,7 +214,6 @@ bool PzemSendCmd8( pzem_setup_t *pzSetup, uint8_t cmd, uint16_t regAddr, uint16_
             }
         }
     }
-
     return true;
 }
 
@@ -251,9 +239,7 @@ bool PzemGetValues( pzem_setup_t *pzSetup, _current_values_t *pmonValues )
     /* Zero all values */
     (void)PzemZeroValues( ( _current_values_t * ) pmonValues );
 
-    uint8_t respbuff[RESP_BUF_SIZE] = {0};
-    memset(respbuff, 0, sizeof(respbuff));
-
+    uint8_t respbuff[RESP_BUF_SIZE*2] = {0};
 
     /* Tell the sensor to Read 10 Registers from 0x00 to 0x0A (all values) */
     if (PzemSendCmd8( pzSetup, CMD_RIR, 0x00, 0x0A, false, 0xFFFF ) == false) {
@@ -263,7 +249,11 @@ bool PzemGetValues( pzem_setup_t *pzSetup, _current_values_t *pmonValues )
     /* Read response from the sensor, if everything goes well we retreived 25 Bytes */
     if ( PzemReceive( pzSetup, respbuff, RESP_BUF_SIZE ) != RESP_BUF_SIZE ) { /* Something went wrong */
         last_update = now + UPDATE_TIME * 1000 * 10;
-        ESP_LOGD(LOG_TAG, "Wrong response size !!");
+        if( respbuff[0] == 0xF8 && respbuff[1] == 0x04  && respbuff[2] == 0x0  && respbuff[3] == 0x0  && respbuff[4] == 0x0  && respbuff[5] == 0x0A  && respbuff[6] == 0x64  && respbuff[7] == 0x64) {
+            // got command back
+            return false;
+        }
+//      ESP_LOGI(LOG_TAG, "Wrong response size !!");
         return false;
     }
 
@@ -404,3 +394,25 @@ static uint16_t crc16(const uint8_t *data, uint16_t len)
 
     return crc;
 }
+
+
+
+
+/*
+
+I (07:54:20.925) PZ_INIT: Initializing UART
+I (07:54:20.930) PZ_INIT: UART set pins, mode and install driver.
+I (07:54:20.938) PZ_SEND8: Wrote 8 bytes
+I (07:54:20.941) PZ_SEND8: 0x3fcb39a0   f8 03 00 02 00 01 31 a3                           |......1.|
+I (07:54:20.956) PzemReceive: Read 7  bytes: '�'
+I (07:54:20.957) PzemReceive: 0x3fcaa194   f8 03 00 02 00 01 31                              |......1|
+I (07:54:20.967) PZ_SEND8: Wrote 8 bytes
+I (07:54:20.971) PZ_SEND8: 0x3fcb39a0   f8 03 00 02 00 01 31 a3                           |......1.|
+I (07:54:20.985) PzemReceive: Read 7  bytes: '��'
+I (07:54:20.986) PzemReceive: 0x3fcaa194   a3 f8 03 00 02 00 01                              |.......|
+I (07:54:20.986) monitor: pzem adress: 2
+
+f8 03 00 02 00 01 31 a3
+f8 03 00 02 00 01 31
+
+*/
