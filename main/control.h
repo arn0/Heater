@@ -15,4 +15,4 @@ bool control_task_start();
 }
 #endif
 
-#endif //CONTROL_H
+#endif // CONTROL_H

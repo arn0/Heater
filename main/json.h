@@ -7,26 +7,26 @@
 
 namespace MyJsonNamespace {
 
-   class MyJsonClass {
-      public:
-         JsonDocument doc;
-         char json_string[256+64];
-         time_t Jnow;
+	class MyJsonClass {
+	public:
+		JsonDocument doc;
+		char json_string[256 + 64];
+		time_t Jnow;
 
-         // Constructor
-         MyJsonClass();
+		// Constructor
+		MyJsonClass();
 
-         // Fill string
-         char* update(void);
-   };
-   static MyJsonClass MyJsonObject;
+		// Fill string
+		char *update( void );
+	};
+	static MyJsonClass MyJsonObject;
 }
 
 extern "C" {
 
 #endif
 
-char* json_update(void);
+char *json_update( void );
 
 #ifdef __cplusplus
 }

@@ -2,7 +2,7 @@
 
 BasedOnStyle: LLVM
 AllowShortFunctionsOnASingleLine: Empty
-UseTab: Never
+UseTab: ForContinuationAndIndentation
 BreakBeforeBraces: Attach
 IndentWidth: 3
 TabWidth: 3

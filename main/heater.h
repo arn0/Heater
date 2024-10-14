@@ -13,7 +13,7 @@ extern "C" {
  * GPIO_OUTPUT_PIN_SEL                0000000000000000000011000000000000000000
  */
 
-#define GPIO_OUTPUT_PIN_SEL  ((1ULL<<SSR_ONE_GPIO_PIN) | (1ULL<<SSR_TWO_GPIO_PIN))
+#define GPIO_OUTPUT_PIN_SEL ( ( 1ULL << SSR_ONE_GPIO_PIN ) | ( 1ULL << SSR_TWO_GPIO_PIN ) )
 
 struct heater_status {
 	float target;
@@ -23,11 +23,11 @@ struct heater_status {
 	float top;
 	float chip;
 	float rem;
-   float voltage;
-   float current;
-   float power;            // Active Power P. or Real Power W.
-   float energy;
-   float pf;               // Ratio of active to apparent power, cos(fi), eg pf = 0.77, 77% of current is doing the real work
+	float voltage;
+	float current;
+	float power; 		// Active Power P. or Real Power W.
+	float energy;
+	float pf; 			// Ratio of active to apparent power, cos(fi), eg pf = 0.77, 77% of current is doing the real work
 	bool one_on;
 	bool one_gpio;
 	bool two_on;
@@ -47,4 +47,4 @@ bool heater_task_start();
 }
 #endif
 
-#endif //HEATER_H
+#endif // HEATER_H

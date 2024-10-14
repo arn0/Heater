@@ -31,7 +31,7 @@
 
 static const char *TAG = "wifi station";
 
-/* FreeRTOS event group to signal when we are connected*/
+// FreeRTOS event group to signal when we are connected
 EventGroupHandle_t s_wifi_event_group;
 
 static int s_retry_num = 0;
@@ -76,9 +76,9 @@ static void wifi_event_handler( void *arg, esp_event_base_t event_base, int32_t 
 				esp_wifi_connect();
 				ESP_LOGI(TAG, "wifi event handler: esp_wifi_connect() done, retry %d", s_retry_num);
 
-				//xEventGroupSetBits(s_wifi_event_group, WIFI_DISCONNECTED_BIT);
-				//ESP_LOGI(TAG, "event handler: xEventGroupSetBits(s_wifi_event_group, WIFI_DISCONNECTED_BIT) done");
-				//s_retry_num = 0;
+				// xEventGroupSetBits(s_wifi_event_group, WIFI_DISCONNECTED_BIT);
+				// ESP_LOGI(TAG, "event handler: xEventGroupSetBits(s_wifi_event_group, WIFI_DISCONNECTED_BIT) done");
+				// s_retry_num = 0;
 			}
 			ESP_LOGI(TAG, "wifi event handler: connect to the AP failed");
 			break;
@@ -91,80 +91,80 @@ static void wifi_event_handler( void *arg, esp_event_base_t event_base, int32_t 
 		case WIFI_EVENT_STA_WPS_ER_FAILED:
 			ESP_LOGI(TAG, "wifi event handler: Station wps fails in enrollee mode");
 			break;
-		case WIFI_EVENT_STA_WPS_ER_TIMEOUT: /**< Station wps timeout in enrollee mode */
+		case WIFI_EVENT_STA_WPS_ER_TIMEOUT: // Station wps timeout in enrollee mode
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_WPS_ER_TIMEOUT");
 			break;
-		case WIFI_EVENT_STA_WPS_ER_PIN: /**< Station wps pin code in enrollee mode */
+		case WIFI_EVENT_STA_WPS_ER_PIN: // Station wps pin code in enrollee mode
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_WPS_ER_PIN");
 			break;
-		case WIFI_EVENT_STA_WPS_ER_PBC_OVERLAP:  /**< Station wps overlap in enrollee mode */
+		case WIFI_EVENT_STA_WPS_ER_PBC_OVERLAP:  // Station wps overlap in enrollee mode
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_WPS_ER_PBC_OVERLAP");
 			break;
-		case WIFI_EVENT_AP_START: /**< Soft-AP start */
+		case WIFI_EVENT_AP_START: // Soft-AP start
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_AP_START");
 			break;
-		case WIFI_EVENT_AP_STOP: /**< Soft-AP stop */
+		case WIFI_EVENT_AP_STOP: // Soft-AP stop
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_AP_STOP");
 			break;
-		case WIFI_EVENT_AP_STACONNECTED: /**< a station connected to Soft-AP */
+		case WIFI_EVENT_AP_STACONNECTED: // a station connected to Soft-AP
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_AP_STACONNECTED");
 			break;
-		case WIFI_EVENT_AP_STADISCONNECTED: /**< a station disconnected from Soft-AP */
+		case WIFI_EVENT_AP_STADISCONNECTED: // a station disconnected from Soft-AP
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_AP_STADISCONNECTED");
 			sntp_client_stop();
 			break;
-		case WIFI_EVENT_AP_PROBEREQRECVED: /**< Receive probe request packet in soft-AP interface */
+		case WIFI_EVENT_AP_PROBEREQRECVED: // Receive probe request packet in soft-AP interface
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_AP_PROBEREQRECVED");
 			break;
-		case WIFI_EVENT_FTM_REPORT: /**< Receive report of FTM procedure */
+		case WIFI_EVENT_FTM_REPORT: // Receive report of FTM procedure
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_FTM_REPORT");
 			break;
-		case WIFI_EVENT_STA_BSS_RSSI_LOW: /**< AP's RSSI crossed configured threshold */
+		case WIFI_EVENT_STA_BSS_RSSI_LOW: // AP's RSSI crossed configured threshold
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_BSS_RSSI_LOW");
 			break;
-		case WIFI_EVENT_ACTION_TX_STATUS: /**< Status indication of Action Tx operation */
+		case WIFI_EVENT_ACTION_TX_STATUS: // Status indication of Action Tx operation
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ACTION_TX_STATUS");
 			break;
-		case WIFI_EVENT_ROC_DONE: /**< Remain-on-Channel operation complete */
+		case WIFI_EVENT_ROC_DONE: // Remain-on-Channel operation complete
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ROC_DONE");
 			break;
-		case WIFI_EVENT_STA_BEACON_TIMEOUT: /**< Station beacon timeout */
+		case WIFI_EVENT_STA_BEACON_TIMEOUT: // Station beacon timeout
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_STA_BEACON_TIMEOUT");
 			break;
-		case WIFI_EVENT_ITWT_SETUP: /**< iTWT setup */
+		case WIFI_EVENT_ITWT_SETUP: // iTWT setup
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ITWT_SETUP");
 			break;
-		case WIFI_EVENT_ITWT_TEARDOWN: /**< iTWT teardown */
+		case WIFI_EVENT_ITWT_TEARDOWN: // iTWT teardown
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ITWT_TEARDOWN");
 			break;
-		case WIFI_EVENT_ITWT_PROBE: /**< iTWT probe */
+		case WIFI_EVENT_ITWT_PROBE: // iTWT probe
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ITWT_PROBE");
 			break;
-		case WIFI_EVENT_ITWT_SUSPEND: /**< iTWT suspend */
+		case WIFI_EVENT_ITWT_SUSPEND: // iTWT suspend
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ITWT_SUSPEND");
 			break;
-		case WIFI_EVENT_NAN_STARTED: /**< NAN Discovery has started */
+		case WIFI_EVENT_NAN_STARTED: // NAN Discovery has started
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_STARTED");
 			break;
-		case WIFI_EVENT_NAN_STOPPED: /**< NAN Discovery has stopped */
+		case WIFI_EVENT_NAN_STOPPED: // NAN Discovery has stopped
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_STOPPED");
 			break;
-		case WIFI_EVENT_NAN_SVC_MATCH: /**< NAN Service Discovery match found */
+		case WIFI_EVENT_NAN_SVC_MATCH: // NAN Service Discovery match found
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_SVC_MATCH");
 			break;
-		case WIFI_EVENT_NAN_REPLIED: /**< Replied to a NAN peer with Service Discovery match */
+		case WIFI_EVENT_NAN_REPLIED: // Replied to a NAN peer with Service Discovery match
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_REPLIED");
 			break;
-		case WIFI_EVENT_NAN_RECEIVE: /**< Received a Follow-up message */
+		case WIFI_EVENT_NAN_RECEIVE: // Received a Follow-up message
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_RECEIVE");
 			break;
-		case WIFI_EVENT_NDP_INDICATION: /**< Received NDP Request from a NAN Peer */
+		case WIFI_EVENT_NDP_INDICATION: // Received NDP Request from a NAN Peer
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NDP_INDICATION");
 			break;
-		case WIFI_EVENT_NDP_CONFIRM: /**< NDP Confirm Indication */
+		case WIFI_EVENT_NDP_CONFIRM: // NDP Confirm Indication
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NDP_CONFIRM");
 			break;
-		case WIFI_EVENT_NDP_TERMINATED: /**< NAN Datapath terminated indication */
+		case WIFI_EVENT_NDP_TERMINATED: // NAN Datapath terminated indication
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NDP_TERMINATED");
 			break;
 		case WIFI_EVENT_HOME_CHANNEL_CHANGE:
@@ -183,7 +183,7 @@ static void ip_event_handler( void *arg, esp_event_base_t event_base, int32_t ev
 {
 	if (event_base == IP_EVENT) {
 		switch ( event_id ) {
-		case IP_EVENT_STA_GOT_IP: /*!< station got IP from connected AP */
+		case IP_EVENT_STA_GOT_IP: // station got IP from connected AP
 			ESP_LOGI( TAG, "ip event handler: IP_EVENT_STA_GOT_IP" );
 			ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
 			ESP_LOGI( TAG, "ip event handler: got ip:" IPSTR, IP2STR( &event->ip_info.ip ) );
@@ -194,29 +194,29 @@ static void ip_event_handler( void *arg, esp_event_base_t event_base, int32_t ev
 			lvgl_ui_update();
 #endif
 			break;
-		case IP_EVENT_STA_LOST_IP: /*!< station lost IP and the IP is reset to 0 */
+		case IP_EVENT_STA_LOST_IP: // station lost IP and the IP is reset to 0
 			ESP_LOGI( TAG, "ip event handler: IP_EVENT_STA_LOST_IP" );
 			heater_status.wifi = false;
 #ifdef CONFIG_EXAMPLE_ENABLE_LCD
 			lvgl_ui_update();
 #endif
 			break;
-		case IP_EVENT_AP_STAIPASSIGNED: /*!< soft-AP assign an IP to a connected station */
+		case IP_EVENT_AP_STAIPASSIGNED: // soft-AP assign an IP to a connected station
 			ESP_LOGI( TAG, "ip event handler: IP_EVENT_AP_STAIPASSIGNED" );
 			break;
-		case IP_EVENT_GOT_IP6: /*!< station or ap or ethernet interface v6IP addr is preferred */
+		case IP_EVENT_GOT_IP6: // station or ap or ethernet interface v6IP addr is preferred
 			ESP_LOGI( TAG, "ip event handler: IP_EVENT_GOT_IP6" );
 			break;
-		case IP_EVENT_ETH_GOT_IP: /*!< ethernet got IP from connected AP */
+		case IP_EVENT_ETH_GOT_IP: // ethernet got IP from connected AP
 			ESP_LOGI( TAG, "ip event handler: IP_EVENT_ETH_GOT_IP" );
 			break;
-		case IP_EVENT_ETH_LOST_IP: /*!< ethernet lost IP and the IP is reset to 0 */
+		case IP_EVENT_ETH_LOST_IP: // ethernet lost IP and the IP is reset to 0
 			ESP_LOGI( TAG, "ip event handler: IP_EVENT_ETH_LOST_IP" );
 			break;
-		case IP_EVENT_PPP_GOT_IP: /*!< PPP interface got IP */
+		case IP_EVENT_PPP_GOT_IP: // PPP interface got IP
 			ESP_LOGI( TAG, "ip event handler: IP_EVENT_PPP_GOT_IP" );
 			break;
-		case IP_EVENT_PPP_LOST_IP: /*!< PPP interface lost IP */
+		case IP_EVENT_PPP_LOST_IP: // PPP interface lost IP
 			ESP_LOGI( TAG, "ip event handler: IP_EVENT_PPP_LOST_IP" );
 			break;
 		default:
