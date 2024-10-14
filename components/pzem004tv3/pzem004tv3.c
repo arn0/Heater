@@ -271,17 +271,17 @@ bool PzemGetValues( pzem_setup_t *pzSetup, _current_values_t *pmonValues )
     pmonValues->current = ( ( uint32_t ) respbuff[ 5 ] << 8 | /* Raw current in 0.001A */
                             ( uint32_t ) respbuff[ 6 ] |
                             ( uint32_t ) respbuff[ 7 ] << 24 |
-                            ( uint32_t ) respbuff[ 8 ] << 16 ) / 1000.0;
+                            ( uint32_t ) respbuff[ 8 ] << 16 ) / ( 1000.0 * CURRENT_COIL_WINDINGS );
 
     pmonValues->power = ( ( uint32_t ) respbuff[ 9 ] << 8 | /* Raw power in 0.1W */
                           ( uint32_t ) respbuff[ 10 ] |
                           ( uint32_t ) respbuff[ 11 ] << 24 |
-                          ( uint32_t ) respbuff[ 12 ] << 16 ) / 10.0;
+                          ( uint32_t ) respbuff[ 12 ] << 16 ) / ( 10.0 * CURRENT_COIL_WINDINGS );
 
     pmonValues->energy = ( ( uint32_t ) respbuff[ 13 ] << 8 | /* Raw Energy in 1Wh */
                            ( uint32_t ) respbuff[ 14 ] |
                            ( uint32_t ) respbuff[ 15 ] << 24 |
-                           ( uint32_t ) respbuff[ 16 ] << 16 ) / 1000.0;
+                           ( uint32_t ) respbuff[ 16 ] << 16 ) / ( 1000.0 * CURRENT_COIL_WINDINGS );
 
     pmonValues->frequency = ( ( uint32_t ) respbuff[ 17 ] << 8 | /* Raw Frequency in 0.1Hz */
                               ( uint32_t ) respbuff[ 18 ] ) / 10.0;

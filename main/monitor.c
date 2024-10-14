@@ -120,9 +120,9 @@ void monitor_task() {
       } else {
          if ( PzemGetValues( &pzConf, &pzValues ) ) {
             heater_status.voltage = pzValues.voltage;
-            heater_status.current = pzValues.current / 5;
-            heater_status.power = pzValues.power / 5;
-            heater_status.energy = pzValues.energy / 5;
+            heater_status.current = pzValues.current;
+            heater_status.power = pzValues.power;
+            heater_status.energy = pzValues.energy;
             heater_status.pf = pzValues.pf;
          } else {
             ESP_LOGV( TAG, "PzemGetValues returned false" );

@@ -27,6 +27,12 @@ typedef struct pz_conf_t {
 } pzem_setup_t;
 
 /*
+Compensate for more than one winding trough the current coil
+*/
+
+#define CURRENT_COIL_WINDINGS 5
+
+/*
 PZEM-004T-100A-D-P(V1.0)
 Has a pulse output and pulse indicator led
 1600 imp/kwh
