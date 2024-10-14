@@ -107,9 +107,9 @@ void control_task() {
       if ( heater_status.fnt >= INTERNAL_MAX_TEMP || heater_status.bck >= INTERNAL_MAX_TEMP || heater_status.top >= MAX_TEMP || heater_status.bot >= MAX_TEMP || heater_status.chip >= INTERNAL_MAX_TEMP ) {
          delta = 0.0;
       }
-
-      if( heater_status.bot > MAX_TEMP - 0.4 ) {
-         delta = MAX_TEMP - heater_status.bot;
+      // Compensate for overshooting
+      if( delta > 0 && heater_status.bot > MAX_TEMP - 2.0 ) {
+         delta = ( MAX_TEMP - heater_status.bot ) / 5;
       }
 
       if ( delta <= 0.0 ) {
