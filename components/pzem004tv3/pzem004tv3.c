@@ -40,8 +40,10 @@ void PzemInit( pzem_setup_t *pzSetup )
     /* Configure UART parameters */
     ESP_ERROR_CHECK( uart_param_config( pzSetup->uart, &uart_config ) );
 
+
     /* Set UART pins(TX: , RX: , RTS: -1, CTS: -1) */
     ESP_ERROR_CHECK( uart_set_pin( pzSetup->uart, pzSetup->tx_pin, pzSetup->rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE ) );
+    gpio_set_drive_capability( pzSetup->tx_pin, GPIO_DRIVE_CAP_3 );
 }
 
 
@@ -69,10 +71,10 @@ uint16_t PzemReceive( pzem_setup_t *pzSetup, uint8_t *resp, uint16_t len )
 
     if ( rxBytes > 0 ) {
 //      resp[ rxBytes ] = 0;
-        ESP_LOGI( LOG_TAG, "Read %d  bytes'", rxBytes );
-        ESP_LOG_BUFFER_HEXDUMP( LOG_TAG, resp, rxBytes, ESP_LOG_INFO );
+        ESP_LOGV( LOG_TAG, "Read %d  bytes'", rxBytes );
+        ESP_LOG_BUFFER_HEXDUMP( LOG_TAG, resp, rxBytes, ESP_LOG_VERBOSE );
     } else {
-        ESP_LOGI( LOG_TAG, "Read %d  bytes'", rxBytes );
+        ESP_LOGV( LOG_TAG, "Read %d  bytes'", rxBytes );
     }
     return rxBytes;
 }
@@ -199,8 +201,8 @@ bool PzemSendCmd8( pzem_setup_t *pzSetup, uint8_t cmd, uint16_t regAddr, uint16_
 
     int txBytes = uart_write_bytes( pzSetup->uart, txdata, TX_BUF_SIZE );
 
-    ESP_LOGI( LOG_TAG, "Wrote %d bytes", txBytes );
-    ESP_LOG_BUFFER_HEXDUMP( LOG_TAG, txdata, txBytes, ESP_LOG_INFO );
+    ESP_LOGV( LOG_TAG, "Wrote %d bytes", txBytes );
+    ESP_LOG_BUFFER_HEXDUMP( LOG_TAG, txdata, txBytes, ESP_LOG_VERBOSE );
 
     if ( check ) {
         if ( !PzemReceive( pzSetup, rxdata, RX_BUF_SIZE ) ) { /* if check enabled, read the response */
