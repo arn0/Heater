@@ -98,6 +98,9 @@ html {
   .icon-tools {
     mask: url("tools.svg");
    }
+   .icon-graph {
+    mask: url("graph.svg");
+   }
    .icon {
    display: inline-block;
    width: 32px;

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Radiator</title>
+	<link rel="stylesheet" href="./graph.css" type="text/css" media="screen" charset="utf-8">
+	<script src="https://d3js.org/d3.v5.min.js"></script>
+</head>
+
+<body>
+	<div>
+		<div id="container"></div>
+	</div>
+
+	<div class="flex-container">
+		<div class="flex-item">
+			<div id="chart"></div>
+		</div>
+	</div>
+
+	<div>
+		<input type="checkbox" id="rem" checked>
+		<label class="flex-item" for="rem">Remote</label>
+		<input type="checkbox" id="target" checked>
+		<label class="flex-item" for="target">Target</label>
+		<input type="checkbox" id="top">
+		<label class="flex-item" for="top">Top</label>
+		<input type="checkbox" id="bot">
+		<label class="flex-item" for="bot">Bottom</label>
+		<input type="checkbox" id="fnt">
+		<label class="flex-item" for="fnt">Front</label>
+		<input type="checkbox" id="bck">
+		<label class="flex-item" for="bck">Back</label>
+		<input type="checkbox" id="diff">
+		<label class="flex-item" for="diff">Diff</label>
+		<input type="checkbox" id="htr">
+		<label class="flex-item" for="htr">Heaters</label>
+		<input id="days" name="days" value="1">
+		<a href="index.html">Home</a>
+		<a href="tools.html">Tools</a>
+	</div>
+
+	<script src="graph.js"></script>
+	<script>
+		chart = new HistoricalChart();
+	</script>
+
+</body>

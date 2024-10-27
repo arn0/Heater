@@ -32,7 +32,11 @@ var gateway = `ws://${window.location.hostname}/ws`;
 var websocket;
 var update;
 
-function initWebSocket() {
+function sleep(ms) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+ }
+ 
+ function initWebSocket() {
 	console.log('Trying to open a WebSocket connection...');
 	websocket = new WebSocket(gateway);
 	websocket.onopen    = onOpen;
@@ -95,6 +99,7 @@ function onLoad(event) {
 	initWebSocket();
 	initButtons();
 	openDb();
+	sleep(5000).then(() => { countRecords(); });
 }
 		 
 function initButtons() {
@@ -174,8 +179,42 @@ function addSnapshot(obj) {
 	};
 }
 
-const plot = [];
+const count = document.getElementById("count");
+const old = document.getElementById("old");
 
+function countRecords(){
+	const transaction = db.transaction([DB_STORE_NAME], "readonly");
+	const objectStore = transaction.objectStore(DB_STORE_NAME);
+	
+	const countRequest = objectStore.count();
+	countRequest.onsuccess = () => {
+	  count.textContent = countRequest.result;
+	};
+	oldRecord();
+}
+
+function oldRecord(){
+	const transaction = db.transaction([DB_STORE_NAME], "readonly");
+	const objectStore = transaction.objectStore(DB_STORE_NAME);
+	
+	objectStore.openCursor(null,'next').onsuccess = function(event) {
+		if (event.target.result) {
+			const oldDate = new Date(event.target.result.value.time*1000);
+			old.textContent = oldDate.toLocaleString();
+		}
+	};
+}
+
+
+
+
+
+
+
+
+
+
+/*
 function retrieve(){
 //	console.log("Retieve data");
 	const high = getTimestampInSeconds();
@@ -234,7 +273,7 @@ function retrieve(){
 	console.log("plot", plot);
 //	updateData()
 }
-
+*/
 
 
 function getTimestampInSeconds () {
