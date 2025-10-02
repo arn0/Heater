@@ -1,3 +1,26 @@
+//import { timeFormatDefaultLocale } from "d3-time-format";
+
+
+var formatMillisecond = d3.timeFormat(".%L"),
+  formatSecond = d3.timeFormat(":%S"),
+  formatMinute = d3.timeFormat("%H:%M"),
+  formatHour = d3.timeFormat("%H:%M"),
+  formatDay = d3.timeFormat("%a %d"),
+  formatWeek = d3.timeFormat("%b %d"),
+  formatMonth = d3.timeFormat("%B"),
+  formatYear = d3.timeFormat("%Y");
+
+function multiFormat(date) {
+  console.log('multiFormat', date);
+  return (d3.timeSecond(date) < date ? formatMillisecond
+    : d3.timeMinute(date) < date ? formatSecond
+      : d3.timeHour(date) < date ? formatMinute
+        : d3.timeDay(date) < date ? formatHour
+          : d3.timeMonth(date) < date ? (d3.timeWeek(date) < date ? formatDay : formatWeek)
+            : d3.timeYear(date) < date ? formatMonth
+              : formatYear)(date);
+};
+
 class HistoricalChart {
   constructor() {
     this.margin;
@@ -49,15 +72,15 @@ class HistoricalChart {
       this.toggleHeaters(document.querySelector('input[id=htr]').checked);
     });
 
-    const viewDays = document.querySelector('input[id=days]');
-    viewDays.addEventListener('change', event => {
-      this.toggleDays(document.querySelector('input[id=days]').value);
+    const viewTime = document.querySelector('select[id=time]');
+    viewTime.addEventListener('change', event => {
+      this.toggleTime(document.querySelector('select[id=time]').value);
     });
   }
 
   initialiseChart(data) {
     const nextYearStartDate = new Date();  // Now
-    const thisYearStartDate = new Date(nextYearStartDate.getTime() - days_on_graph * 24 * 60 * 60 * 1000); // 1 day ago
+    const thisYearStartDate = new Date(nextYearStartDate.getTime() - time_on_graph * 60 * 60 * 1000);
 
     // remove invalid data points
     const validData = data.filter(row => row['time'] && row['rem']);
@@ -79,15 +102,14 @@ class HistoricalChart {
       document.documentElement.clientHeight,
       window.innerHeight
     );
-    this.margin = { top: 20, right: 30, bottom: 20, left: 20 };
+    this.margin = { top: 20, right: 40, bottom: 20, left: 40 };
     if (viewportWidth <= 768) {
       this.width = viewportWidth - this.margin.left - this.margin.right; // Use the window's width
       this.height = 0.7 * viewportHeight - this.margin.top - this.margin.bottom; // Use the window's height
     } else {
-      this.width = viewportWidth - this.margin.left - this.margin.right;
-      this.height = 0.85 * viewportHeight - this.margin.top - this.margin.bottom; // Use the window's height
+      this.width = viewportWidth - this.margin.left - this.margin.right - 80;
+      this.height = viewportHeight - this.margin.top - this.margin.bottom - 80; // Use the window's height
     }
-
     // find data range
     var xMin = d3.min(this.currentData, d => d['time']);
     var xMax = d3.max(this.currentData, d => d['time']);
@@ -105,7 +127,6 @@ class HistoricalChart {
     if (temp < yMin) { yMin = temp }
     temp = d3.max(this.currentData, d => d['bot']);
     if (temp > yMax) { yMax = temp }
-
 
     // scale using range
     this.xScale = d3
@@ -135,7 +156,17 @@ class HistoricalChart {
       .append('g')
       .attr('class', 'xAxis')
       .attr('transform', `translate(0, ${this.height})`)
-      .call(d3.axisBottom(this.xScale));
+      .call(d3.axisBottom()
+        .tickFormat(() => console.log("t"))
+        .scale(this.xScale)
+        //.tickFormat(function(d){return multiFormat(d);})
+        //.tickFormat(d => multiFormat(d))
+        //.tickFormat(d3.timeFormat("%H:%M:%S"))
+        //.tickFormat(d => d + "%")
+      );
+
+    //d3.axisBottom().tickFormat(() => '');
+    d3.axisBottom().ticks(4);
 
     this.yAxis = svg
       .append('g')
@@ -299,13 +330,8 @@ class HistoricalChart {
   // Start of update
 
   setDataset(event) {
-    //      this.loadData("vig").then(response => {
-
     const nextYearStartDate = new Date();
-    const thisYearStartDate = new Date(nextYearStartDate.getTime() - days_on_graph * 24 * 60 * 60 * 1000);
-
-    //console.log("setDataset:")
-    //console.log(plot);
+    const thisYearStartDate = new Date(nextYearStartDate.getTime() - time_on_graph * 60 * 60 * 1000);
 
     // remove invalid data points
     const validData = plot.filter(row => row['time'] && row['rem']);
@@ -318,17 +344,14 @@ class HistoricalChart {
       }
     });
 
-    //console.log(validData);
-
-
     const viewportWidth = Math.max(document.documentElement.clientWidth, window.innerWidth);
     const viewportHeight = Math.max(document.documentElement.clientHeight, window.innerHeight);
     if (viewportWidth <= 768) {
       this.width = viewportWidth - this.margin.left - this.margin.right; // Use the window's width
       this.height = 0.5 * viewportHeight - this.margin.top - this.margin.bottom; // Use the window's height
     } else {
-      this.width = 0.85 * viewportWidth - this.margin.left - this.margin.right;
-      this.height = viewportHeight - this.margin.top - this.margin.bottom; // Use the window's height
+      this.width = viewportWidth - this.margin.left - this.margin.right - 80;
+      this.height = viewportHeight - this.margin.top - this.margin.bottom - 80; // Use the window's height
     }
 
     /* update the min, max values, and scales for the axes */
@@ -381,20 +404,17 @@ class HistoricalChart {
       if (yTmp > yMax) { yMax = yTmp }
     }
     if (document.querySelector('input[id=htr]').checked) {
-      yTmp = d3.min(this.currentData, d => d['htr']);
-      if (yTmp < yMin) { yMin = yTmp }
+      if (yMin > 0) { yMin = 0 }
+      //yTmp = d3.min(this.currentData, d => d['htr']);
+      //if (yTmp < yMin) { yMin = yTmp }
       yTmp = d3.max(this.currentData, d => d['htr']);
       if (yTmp > yMax) { yMax = yTmp }
     }
-
-    //console.log("xMin xMax yMin yMax", xMin, xMax, yMin, yMax);
 
     this.xScale.domain([xMin, xMax]);
     this.yScale.domain([yMin, yMax]);
 
     this.updateChart();
-    //    });
-
   }
 
   updateChart() {
@@ -445,7 +465,7 @@ class HistoricalChart {
   generateCrosshair(current) {
     //returns corresponding value from the domain
     const focus = d3.select('.focus');
-    const bisectDate = d3.bisector(d => d.date).left;
+    const bisectDate = d3.bisector(d => d['time']).left;
     const correspondingDate = this.xScale.invert(d3.mouse(current)[0]);
     //gets insertion point
     const i = bisectDate(this.currentData, correspondingDate, 1);
@@ -475,7 +495,7 @@ class HistoricalChart {
       .attr('y2', this.height - this.yScale(currentPoint['rem']));
 
     // updates the legend to display the date, open, close, high, low, and volume and selected mouseover area
-    //this.updateLegends(currentPoint);
+    this.updateLegends(currentPoint);
   }
 
   updateLegends(currentPoint) {
@@ -495,7 +515,7 @@ class HistoricalChart {
           .append('text')
           .text(d => {
             if (d === 'time') {
-              return `${d}: ${currentPoint[d].toLocaleDateString()}`;
+              return `${d}: ${new Date(currentPoint[d]).toLocaleString()}`;
             } else if (
               d === 'high' ||
               d === 'low' ||
@@ -508,7 +528,7 @@ class HistoricalChart {
             }
           })
           .style('font-size', '0.8em')
-          .style('fill', 'white')
+          .style('fill', 'black')
           .attr('transform', 'translate(15,9)') //align texts with boxes*/
     );
   }
@@ -562,7 +582,7 @@ class HistoricalChart {
       .attr('height', this.height)
       .on('mouseover', () => focus.style('display', null))
       .on('mouseout', () => focus.style('display', 'none'))
-    //    .on('mousemove', (d, i, nodes) => this.generateCrosshair(nodes[i]));
+      .on('mousemove', (d, i, nodes) => this.generateCrosshair(nodes[i]));
   }
 
   renderVolumeBarCharts() {
@@ -626,8 +646,8 @@ class HistoricalChart {
     if (value) {
       if (this.zoom) {
         d3.select('svg')
-          .transition()
-          .duration(750)
+          //.transition()
+          //.duration(750)
           .call(this.zoom.transform, d3.zoomIdentity.scale(1));
       }
 
@@ -668,8 +688,8 @@ class HistoricalChart {
     if (value) {
       if (this.zoom) {
         d3.select('svg')
-          .transition()
-          .duration(750)
+          //.transition()
+          //.duration(750)
           .call(this.zoom.transform, d3.zoomIdentity.scale(1));
       }
 
@@ -711,8 +731,8 @@ class HistoricalChart {
     if (value) {
       if (this.zoom) {
         d3.select('svg')
-          .transition()
-          .duration(750)
+          //.transition()
+          //.duration(750)
           .call(this.zoom.transform, d3.zoomIdentity.scale(1));
       }
 
@@ -943,24 +963,52 @@ class HistoricalChart {
     }
   }
 
-  toggleDays(value) {
-    if (value) {
-      days_on_graph = value;
-      plot = [];
-      //console.log(days_on_graph);
-      //retrieve();
-      //this.setDataset(0);
+  toggleTime(value) {
+    switch (value) {
+      case '1h':
+        time_on_graph = 1;
+        break;
+      case '2h':
+        time_on_graph = 2;
+        break;
+      case '6h':
+        time_on_graph = 6;
+        break;
+      case '12h':
+        time_on_graph = 12;
+        break;
+      case '24h':
+        time_on_graph = 24;
+        break;
+      case '2d':
+        time_on_graph = 2 * 24;
+        break;
+      case '3h':
+        time_on_graph = 3 * 24;
+        break;
+      case '4d':
+        time_on_graph = 4 * 24;
+        break;
+      case '5d':
+        time_on_graph = 5 * 24;
+        break;
+      case '10d':
+        time_on_graph = 10 * 24;
+        break;
+      case '30d':
+        time_on_graph = 30 * 24;
+        break;
+      default:
+        return;
     }
+    plot = [];
+    //console.log(time_on_graph);
+    //retrieve();
+    //this.setDataset(0);
   }
 }
 
-
-
-
-
-
-
-var days_on_graph = 1;
+var time_on_graph = 6;
 
 var gateway = `ws://${window.location.hostname}/ws`;
 var websocket;
@@ -1040,7 +1088,7 @@ function addSnapshot(obj) {
   var req;
 
   try {
-    req = store.add(obj);
+    req = store.put(obj);
   } catch (e) {
     if (e.name == 'DataCloneError')
       displayActionFailure("This engine doesn't know how to clone a Blob, " +
@@ -1059,7 +1107,7 @@ let plot = [];
 
 function retrieve() {
   const high = getTimestampInSeconds();
-  const low = high - days_on_graph * 24 * 60 * 60;
+  const low = high - time_on_graph * 60 * 60;
   const boundKeyRange = IDBKeyRange.bound(low, high, false, true);
 
   const transaction = db.transaction([DB_STORE_NAME], "readonly");
@@ -1073,23 +1121,23 @@ function retrieve() {
       record.time *= 1000;
       record.htr = (8 * record.one_pwr + 12 * record.two_pwr) / 4;
       record.diff = record.bot - record.top;
-      if( plot.length == 0 ) {
+      if (plot.length == 0) {
         plot.push(record);
       } else {
-        let temp = plot.slice( -1 );
-//      console.log( "temp", temp );
-//      console.log( "temp[0].time", temp[0].time );
-//      console.log( "record.time", record.time );
+        let temp = plot.slice(-1);
+        //      console.log( "temp", temp );
+        //      console.log( "temp[0].time", temp[0].time );
+        //      console.log( "record.time", record.time );
 
-        if( temp[0].time < record.time ) {
-//        console.log( "temp[0].time < record.time", temp[0].time < record.time );
+        if (temp[0].time < record.time) {
+          //        console.log( "temp[0].time < record.time", temp[0].time < record.time );
           plot.push(record);
         }
       }
-    cursor.continue();
-}
+      cursor.continue();
+    }
   }
-  console.log("plot", plot);
+  //console.log("plot", plot);
 
   chart.setDataset(0);
 }

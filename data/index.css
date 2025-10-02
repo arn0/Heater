@@ -1,118 +1,133 @@
 html {
-   font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
-   text-align: center;
-  }
-  h1,
-  h2 {
-   color: #8C3636;
-  }
-  h1 {
-   font-size: 22pt;
-   margin-bottom: 8px;
-  }
-  h2 {
-   font-size: 16pt;
-   margin-top: 8px;
-  }
-  button:hover {
-   background-color: #e6e6e6;
-  }
-  .indicators {
-   display: flex;
-   flex-wrap: nowrap;
-   justify-content: center;
-  }
-  .indicators > div {
-   color: white;
-   width: 72px;
-   margin: 10px;
-   text-align: center;
-   line-height: 60px;
-   font-size: 28pt;
-   font-weight: bolder;
-  }
-  .indicator-off {
-   background-color: #0014a8;
-  }
-  .indicator-on {
-   background-color: #b30000;
-  }
-  .buttons {
-    display: flex;
-    flex-wrap: nowrap;
-    justify-content: center;
-    font-family:system-ui;
-    font-size: 20pt;
-    padding-bottom: 20px;
-    height: 58px;
-  }
-  .buttons > div {
-    background-color: #f1f1f1;
-    width: 80px;
-    text-align: center;
-  }
-  button {
-    min-width: 60px;
-    font-size: 20pt;
-  }
-  .datarow {
-    display: flex;
-    flex-wrap: nowrap;
-    justify-content: center;
-    font-family:Verdana, Geneva, Tahoma, sans-serif;
-  }
-    .datarow > div {
-    width: 80px;
-    text-align: center;
-    line-height: 36px;
-    font-size: 14pt;
-  }
-  .icons {
-    display: flex;
-    flex-wrap: nowrap;
-    justify-content: center;
-  }
-   .icons > div {
-    text-align: center;
-  }
-  .timerow {
-    display: flex;
-    flex-wrap: nowrap;
-    justify-content: center;
-    font-family:Verdana, Geneva, Tahoma, sans-serif;
-  }
-  .timerow > div {
-    text-align: center;
-    line-height: 36px;
-    font-size: 12pt;
-  }
-  .icon-wifi {
-   mask: url("wifi.svg");
-  }
-  .icon-bluetooth {
-   mask: url("bluetooth.svg");
-  }
-  .icon-matter {
-   mask: url("matter.svg");
-  }
-  .icon-tools {
-    mask: url("tools.svg");
-   }
-   .icon-graph {
-    mask: url("graph.svg");
-   }
-   .icon {
-   display: inline-block;
-   width: 32px;
-   height: 32px;
-   background: #BEBEBE;
-   mask-size: cover;
-   -webkit-mask-repeat: no-repeat;
-   mask-repeat: no-repeat;
-   mask-position: center;
-   margin: 32px;
-  }
-  .icon:hover,
-  .icon:focus {
-   background: red;
-  }
+  font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+  text-align: center;
+}
+h1, h2 {
+  color: #8C3636;
+}
+h1 {
+  margin-top: 10px;
+  margin-bottom: 6px;
+}
+h2 {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+button:hover {
+  background-color: #e6e6e6;
+}
+.indicators {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+}
+.indicators > div {
+  color: white;
+  width: 72px;
+  margin: 10px;
+  text-align: center;
+  line-height: 60px;
+  font-size: 28pt;
+  font-weight: bolder;
+}
+.indicator-off {
+  background-color: #0014a8;
+}
+.indicator-on {
+  background-color: #b30000;
+}
+.buttons {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  font-family: system-ui;
+  font-size: 20pt;
+  padding-bottom: 12px;
+  height: 52px;
+}
+.buttons > div {
+  background-color: #f1f1f1;
+  width: 80px;
+  text-align: center;
+}
+.buttons > button {
+  min-width: 52px;
+  font-size: 20pt;
+}
+.temprow {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+.temprow > input, .temprow > div {
+  margin-left: 10px;
+  margin-right: 10px;
+}
+.temprow > div {
+  display: flex;
+  align-items: center;
+}
+.temprow > input {
+  font-size: 12pt;
+  text-align: center;
+}
+.datarow {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  font-family: Verdana, Geneva, Tahoma, sans-serif;
+}
+.datarow > div {
+  width: 80px;
+  text-align: center;
+  line-height: 36px;
+  font-size: 14pt;
+}
+.icons {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+}
+.icons > div {
+  text-align: center;
+}
+.timerow {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  font-family: Verdana, Geneva, Tahoma, sans-serif;
+}
+.timerow > div {
+  text-align: center;
+  line-height: 36px;
+  font-size: 12pt;
+}
+.icon-wifi {
+  mask: url("wifi.svg");
+}
+.icon-bluetooth {
+  mask: url("bluetooth.svg");
+}
+.icon-matter {
+  mask: url("matter.svg");
+}
+.icon-tools {
+  mask: url("tools.svg");
+}
+.icon-graph {
+  mask: url("graph.svg");
+}
+.icon {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  background: #BEBEBE;
+  mask-size: cover;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  margin: 32px;
+}
+.icon:hover, .icon:focus {
+  background: red;
+}
