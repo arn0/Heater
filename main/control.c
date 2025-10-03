@@ -1,143 +1,181 @@
-#include <sys/unistd.h>
-#include <sys/stat.h>
+#include <time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esp_system.h"
-#include "esp_spiffs.h"
 #include "esp_log.h"
 
-#include "task_priorities.h"
 #include "control.h"
 #include "heater.h"
-#include "lvgl_ui.h"
+#include "task_priorities.h"
+#include "config.h"
 
 static const char *TAG = "control_task";
-static const char filepath[] = "/data/target.bin";
 
-esp_err_t read_target( float *target ) {
-	struct stat file_stat;
-	FILE *fd = NULL;
-	uint8_t buffer[4];
-
-	if ( stat( filepath, &file_stat ) == 0 ) { // Is there a file?
-		fd = fopen( filepath, "r" );
-		if ( !fd ) {
-			ESP_LOGE( TAG, "Failed to open existing file : %s", filepath );
-			return ESP_FAIL;
-		}
-		if ( fread( buffer, 1, 4, fd ) < 4 ) {
-			ESP_LOGE( TAG, "Failed to read existing file : %s", filepath );
-			return ESP_FAIL;
-		}
-		ESP_LOGD( TAG, "Read existing file : %s, %d bytes", filepath, 4 );
-		fclose( fd );
-		ESP_LOGV( TAG, "Buffer : %02hhX%02hhX%02hhX%02hhX", buffer[3], buffer[2], buffer[1], buffer[0] );
-		*target = *(float *)buffer;
-		return ( ESP_OK );
-	}
-	ESP_LOGE( TAG, "File not found : %s", filepath );
-	return ESP_FAIL;
+static int minutes_since_midnight(const struct tm *timeinfo) {
+    return timeinfo->tm_hour * 60 + timeinfo->tm_min;
 }
 
-esp_err_t write_target( float target ) {
-	struct stat file_stat;
-	FILE *fd = NULL;
-	uint8_t buffer[4];
-
-	*(float *)buffer = target;
-	ESP_LOGV( TAG, "Buffer : %02hhX%02hhX%02hhX%02hhX", buffer[3], buffer[2], buffer[1], buffer[0] );
-
-	if ( stat( filepath, &file_stat ) == 0 ) { // Is there a file?
-		ESP_LOGD( TAG, "Deleting file : %s", filepath );
-		unlink( filepath ); // Delete it
-	}
-	fd = fopen( filepath, "w" );
-	if ( !fd ) {
-		ESP_LOGE( TAG, "Failed to create file : %s", filepath );
-		return ESP_FAIL;
-	}
-	ESP_LOGD( TAG, "Writing file : %s %d bytes", filepath, 4 );
-	if ( fwrite( buffer, 1, 4, fd ) != 4 ) { // Write buffer content to file on storage
-		fclose( fd );                         // Couldn't write everything to file! Storage may be full?
-		unlink( filepath );
-		ESP_LOGE( TAG, "File write failed!" );
-		return ESP_FAIL;
-	}
-	fclose( fd );
-	return ( ESP_OK );
+static int minutes_until(int now_minutes, int target_minutes) {
+    int diff = target_minutes - now_minutes;
+    if (diff < 0) {
+        diff += 24 * 60;
+    }
+    return diff;
 }
 
-/*
- * Control loop
- */
+static float clamp_floor(float value, float floor_value) {
+    return value < floor_value ? floor_value : value;
+}
+
+static void update_schedule_state(const heater_config_t *cfg, time_t now) {
+    struct tm local_time = {0};
+    localtime_r(&now, &local_time);
+    const int current_minutes = minutes_since_midnight(&local_time);
+
+    bool is_day = true;
+    int minutes_to_transition = 0;
+
+    if (cfg->night_enabled) {
+        if (cfg->day_start_minutes == cfg->night_start_minutes) {
+            is_day = true;
+            minutes_to_transition = 24 * 60;
+        } else if (cfg->day_start_minutes < cfg->night_start_minutes) {
+            is_day = current_minutes >= cfg->day_start_minutes && current_minutes < cfg->night_start_minutes;
+            minutes_to_transition = minutes_until(current_minutes, is_day ? cfg->night_start_minutes : cfg->day_start_minutes);
+        } else {
+            // Day period wraps around midnight
+            is_day = current_minutes >= cfg->day_start_minutes || current_minutes < cfg->night_start_minutes;
+            minutes_to_transition = minutes_until(current_minutes, is_day ? cfg->night_start_minutes : cfg->day_start_minutes);
+        }
+    } else {
+        is_day = true;
+        minutes_to_transition = 24 * 60;
+    }
+
+    float scheduled_target = is_day ? cfg->day_temperature : cfg->night_temperature;
+    heater_status.scheduled_base_target = scheduled_target;
+
+    bool preheat = false;
+    if (!is_day && cfg->night_enabled && heater_status.blue) {
+        const int minutes_until_day = minutes_until(current_minutes, cfg->day_start_minutes);
+        float delta = cfg->day_temperature - heater_status.rem;
+        if (delta < 0.0f) {
+            delta = 0.0f;
+        }
+        float warmup_needed = cfg->preheat_max_minutes;
+        if (cfg->warmup_rate_c_per_min > 0.01f) {
+            warmup_needed = delta / cfg->warmup_rate_c_per_min;
+        }
+        if (warmup_needed < (float)cfg->preheat_min_minutes) {
+            warmup_needed = (float)cfg->preheat_min_minutes;
+        }
+        if (warmup_needed > (float)cfg->preheat_max_minutes) {
+            warmup_needed = (float)cfg->preheat_max_minutes;
+        }
+        if (minutes_until_day <= (int)warmup_needed) {
+            preheat = true;
+            scheduled_target = cfg->day_temperature;
+            minutes_to_transition = minutes_until_day;
+        }
+    }
+
+    scheduled_target = clamp_floor(scheduled_target, cfg->floor_temperature);
+
+    heater_status.schedule_target = scheduled_target;
+    heater_status.preheat_active = preheat;
+    heater_status.schedule_is_day = is_day || preheat;
+    heater_status.minutes_to_next_transition = minutes_to_transition;
+}
+
+static void update_override_state(const heater_config_t *cfg, time_t now) {
+    if (!heater_status.override_active) {
+        return;
+    }
+    if (heater_status.override_expires > 0 && now >= heater_status.override_expires) {
+        ESP_LOGI(TAG, "Manual override expired");
+        heater_status.override_active = false;
+        heater_status.override_target = 0.0f;
+        heater_status.override_expires = 0;
+    } else {
+        heater_status.override_target = clamp_floor(heater_status.override_target, cfg->floor_temperature);
+    }
+}
 
 void control_task() {
-	TickType_t xPreviousWakeTime;
-	const TickType_t xTimeIncrement = pdMS_TO_TICKS( CONTROL_TASK_DELAY_MS );
-	BaseType_t xWasDelayed;
-	float delta;
+    TickType_t previous_wake_time = xTaskGetTickCount();
+    const TickType_t time_increment = pdMS_TO_TICKS(CONTROL_TASK_DELAY_MS);
 
-	// Initialise the xLastWakeTime variable with the current time.
-	xPreviousWakeTime = xTaskGetTickCount();
+    do {
+        BaseType_t was_delayed = xTaskDelayUntil(&previous_wake_time, time_increment);
+        if (was_delayed == pdFALSE) {
+            ESP_LOGW(TAG, "Task was not delayed");
+        }
 
-	do {
-		// Wait for the next cycle.
-		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );
+        const heater_config_t *cfg = heater_config_get();
+        if (!cfg) {
+            continue;
+        }
 
-		if ( xWasDelayed == pdFALSE ) {
-			ESP_LOGW( TAG, "Task was not delayed" );
-		}
+        heater_status.safe = true;
+        heater_status.update = false;
 
-		heater_status.safe = true;
-		if ( heater_status.update ) {
-			if ( write_target( heater_status.target ) == ESP_OK ) {
-				heater_status.update = false;
-			}
-		}
+        time_t now;
+        time(&now);
 
-		// here we need to implement a feedback control loop
-		// now just for testing
+        update_schedule_state(cfg, now);
+        update_override_state(cfg, now);
 
-		if ( heater_status.blue ) {
-			delta = heater_status.target - heater_status.rem;
-		} else {
-			delta = 0;
-		}
-		// Check for maximum temperature
-		if ( heater_status.fnt >= INTERNAL_MAX_TEMP || heater_status.bck >= INTERNAL_MAX_TEMP || heater_status.top >= MAX_TEMP || heater_status.bot >= MAX_TEMP || heater_status.chip >= INTERNAL_MAX_TEMP ) {
-			delta = 0.0;
-		}
-		// Compensate for overshooting
-		if ( delta > 0 && heater_status.bot > MAX_TEMP - 2.0 ) {
-			delta = ( MAX_TEMP - heater_status.bot ) / 5;
-		}
+        float effective_target = heater_status.schedule_target;
+        if (heater_status.override_active) {
+            effective_target = heater_status.override_target;
+        }
+        effective_target = clamp_floor(effective_target, cfg->floor_temperature);
+        heater_status.target = effective_target;
 
-		if ( delta <= 0.0 ) {
-			heater_status.one_on = false;
-			heater_status.two_on = false;
-		} else if ( delta > 0.4 ) {
-			heater_status.one_on = true;
-			heater_status.two_on = true;
-		} else if ( delta > 0.2 ) {
-			heater_status.one_on = false;
-			heater_status.two_on = true;
-		} else {
-			heater_status.one_on = true;
-			heater_status.two_on = false;
-		}
-	} while ( true );
+        float delta = 0.0f;
+        if (heater_status.blue) {
+            delta = heater_status.target - heater_status.rem;
+        }
+
+        if (heater_status.fnt >= INTERNAL_MAX_TEMP || heater_status.bck >= INTERNAL_MAX_TEMP ||
+            heater_status.top >= MAX_TEMP || heater_status.bot >= MAX_TEMP ||
+            heater_status.chip >= INTERNAL_MAX_TEMP) {
+            delta = 0.0f;
+        }
+
+        if (delta > 0.0f && heater_status.bot > MAX_TEMP - 2.0f) {
+            delta = (MAX_TEMP - heater_status.bot) / 5.0f;
+        }
+
+        if (delta <= cfg->stage_hold_delta) {
+            heater_status.one_on = false;
+            heater_status.two_on = false;
+        } else if (delta >= cfg->stage_full_delta) {
+            heater_status.one_on = true;
+            heater_status.two_on = true;
+        } else if (delta >= cfg->stage_single_delta) {
+            heater_status.one_on = false;
+            heater_status.two_on = true;
+        } else {
+            heater_status.one_on = true;
+            heater_status.two_on = false;
+        }
+    } while (true);
 }
 
 bool control_task_start() {
+    const heater_config_t *cfg = heater_config_get();
+    if (cfg) {
+        heater_status.target = cfg->day_temperature;
+        heater_status.schedule_target = cfg->day_temperature;
+        heater_status.scheduled_base_target = cfg->day_temperature;
+    } else {
+        heater_status.target = TARGET_DEFAULT;
+    }
+    heater_status.safe = true;
+    heater_status.override_active = false;
+    heater_status.override_target = 0.0f;
+    heater_status.override_expires = 0;
 
-	if ( read_target( &heater_status.target ) != ESP_OK ) {
-		heater_status.target = TARGET_DEFAULT;
-	}
-	heater_status.safe = true;
-
-	// Now we start the contol loop
-
-	xTaskCreate( control_task, "control_task", 4096, NULL, CONTROL_TASK_PRIORITY, NULL );
-
-	return ( true );
+    xTaskCreate(control_task, "control_task", 4096, NULL, CONTROL_TASK_PRIORITY, NULL);
+    return true;
 }

@@ -104,6 +104,14 @@ bool heater_task_start() {
 	heater_status.two_on = false;
 	heater_status.one_gpio = false;
 	heater_status.two_gpio = false;
+	heater_status.schedule_target = 0.0f;
+	heater_status.scheduled_base_target = 0.0f;
+	heater_status.schedule_is_day = true;
+	heater_status.preheat_active = false;
+	heater_status.minutes_to_next_transition = 0;
+	heater_status.override_active = false;
+	heater_status.override_target = 0.0f;
+	heater_status.override_expires = 0;
 
 	// Now we start the heater contol loop
 

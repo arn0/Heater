@@ -23,6 +23,8 @@
 #include "heater.h"
 #include "lvgl_ui.h"
 #include "json.h"
+#include "config.h"
+#include <time.h>
 
 #define HEATER_WEB_STEP 0.1
 
@@ -112,10 +114,38 @@ static struct websock_instance websock_clients[MAX_WEBSOCK_CLIENTS];
  * @param context Unused here, but had to be nonzero for this callback to be called upon socket close
  */
 
-void socket_close_cleanup( struct websock_instance *context ) {
-	ESP_LOGI( TAG, "Lost our client handler." );
-	context->handle = NULL;
-	context->descriptor = 0;
+static void socket_close_cleanup( struct websock_instance *context ) {
+    if ( context && context->handle ) {
+        httpd_ws_client_info_t st = httpd_ws_get_fd_info( context->handle, context->descriptor );
+        switch ( st ) {
+        case HTTPD_WS_CLIENT_INVALID:
+            ESP_LOGI( TAG, "Lost our client handler. Reason: INVALID" );
+            /* fallthrough: treat as real close and clear slot */
+            context->handle = NULL;
+            context->descriptor = 0;
+            return;
+        case HTTPD_WS_CLIENT_HTTP:
+            ESP_LOGI( TAG, "Lost our client handler. Reason: HTTP (not WS)" );
+            /* This callback fires at the end of the HTTP handshake. Do NOT clear slot here. */
+            return;
+        case HTTPD_WS_CLIENT_WEBSOCKET:
+            ESP_LOGI( TAG, "Lost our client handler. Reason: WEBSOCKET (peer close)" );
+            context->handle = NULL;
+            context->descriptor = 0;
+            return;
+        default:
+            ESP_LOGI( TAG, "Lost our client handler." );
+            return;
+        }
+    } else {
+        ESP_LOGI( TAG, "Lost our client handler." );
+    }
+}
+
+static void websocket_close_free_ctx( void *ctx ) {
+    if ( ctx ) {
+        socket_close_cleanup( (struct websock_instance *)ctx );
+    }
 }
 
 esp_err_t send_sensor_update_frame( char *buffer, size_t client ) {
@@ -142,6 +172,47 @@ int16_t do_checksum( int8_t *buffer, size_t size ) {
 static time_t next_log_time = 0;
 static int16_t checksum_last = 0;
 static char *json_string;
+
+static void extend_override_window( void ) {
+	time_t now;
+	time( &now );
+	const heater_config_t *cfg = heater_config_get();
+	int duration = cfg ? cfg->override_duration_minutes : 120;
+	heater_status.override_expires = now + duration * 60;
+}
+
+static void apply_override_delta( float delta ) {
+	const heater_config_t *cfg = heater_config_get();
+	float base = heater_status.override_active ? heater_status.override_target : heater_status.schedule_target;
+	base += delta;
+	if ( cfg ) {
+		if ( base < cfg->floor_temperature ) {
+			base = cfg->floor_temperature;
+		}
+		float upper = cfg->day_temperature + 5.0f;
+		if ( base > upper ) {
+			base = upper;
+		}
+	}
+	heater_status.override_target = base;
+	heater_status.override_active = true;
+	heater_status.target = base;
+	heater_status.update = true;
+	if ( heater_status.minutes_to_next_transition < 0 ) {
+		heater_status.minutes_to_next_transition = 0;
+	}
+	extend_override_window();
+	next_log_time = 0;
+}
+
+static void clear_override( void ) {
+	heater_status.override_active = false;
+	heater_status.override_target = 0.0f;
+	heater_status.override_expires = 0;
+	heater_status.target = heater_status.schedule_target;
+	heater_status.update = true;
+	next_log_time = 0;
+}
 
 /*
  * Send updates to client
@@ -194,33 +265,69 @@ void send_sensor_update() {
 static esp_err_t get_ws_handler( httpd_req_t *req ) {
 	size_t i;
 
-	if ( req->method == HTTP_GET ) {
-		ESP_LOGI( TAG, "Handshake done, the new connection was opened" );
+    if ( req->method == HTTP_GET ) {
+        ESP_LOGI( TAG, "Handshake done, the new connection was opened" );
+
+        /* Diagnose missing/invalid WS headers */
+        char hbuf[96];
+        size_t hlen;
+        hlen = httpd_req_get_hdr_value_len( req, "Upgrade" );
+        if ( hlen > 0 && hlen < sizeof( hbuf ) ) {
+            httpd_req_get_hdr_value_str( req, "Upgrade", hbuf, sizeof( hbuf ) );
+            ESP_LOGI( TAG, "WS header Upgrade: %s", hbuf );
+        } else {
+            ESP_LOGW( TAG, "WS header Upgrade missing or too long (%u)", (unsigned)hlen );
+        }
+        hlen = httpd_req_get_hdr_value_len( req, "Connection" );
+        if ( hlen > 0 && hlen < sizeof( hbuf ) ) {
+            httpd_req_get_hdr_value_str( req, "Connection", hbuf, sizeof( hbuf ) );
+            ESP_LOGI( TAG, "WS header Connection: %s", hbuf );
+        } else {
+            ESP_LOGW( TAG, "WS header Connection missing or too long (%u)", (unsigned)hlen );
+        }
+        hlen = httpd_req_get_hdr_value_len( req, "Sec-WebSocket-Key" );
+        if ( hlen > 0 && hlen < sizeof( hbuf ) ) {
+            httpd_req_get_hdr_value_str( req, "Sec-WebSocket-Key", hbuf, sizeof( hbuf ) );
+            ESP_LOGI( TAG, "WS header Sec-WebSocket-Key: %s", hbuf );
+        } else {
+            ESP_LOGW( TAG, "WS header Sec-WebSocket-Key missing or too long (%u)", (unsigned)hlen );
+        }
+        hlen = httpd_req_get_hdr_value_len( req, "Sec-WebSocket-Version" );
+        if ( hlen > 0 && hlen < sizeof( hbuf ) ) {
+            httpd_req_get_hdr_value_str( req, "Sec-WebSocket-Version", hbuf, sizeof( hbuf ) );
+            ESP_LOGI( TAG, "WS header Sec-WebSocket-Version: %s", hbuf );
+        } else {
+            ESP_LOGW( TAG, "WS header Sec-WebSocket-Version missing or too long (%u)", (unsigned)hlen );
+        }
 
 		for ( i = 0; i < MAX_WEBSOCK_CLIENTS; i++ ) {
 			if ( websock_clients[i].handle == req->handle && websock_clients[i].descriptor == httpd_req_to_sockfd( req ) ) { // client already connected
 				return ESP_OK;
 			}
 		}
-		for ( i = 0; i < MAX_WEBSOCK_CLIENTS; i++ ) {
-			if ( websock_clients[i].handle == NULL ) {
-				ESP_LOGI( TAG, "Have a new client, %d now", i + 1 );
-				websock_clients[i].handle = req->handle;
-				websock_clients[i].descriptor = httpd_req_to_sockfd( req );
-				req->sess_ctx = (void *)&websock_clients[i];
-				req->free_ctx = (void *)socket_close_cleanup;
-				next_log_time = 0; // send update immediately
-				return ESP_OK;
-			}
-		}
-		ESP_LOGI( TAG, "Already have 4 clients, reject connection attempt." );
-		return ESP_FAIL;
+
+        /* Keep existing slots; rely on server to close stale sockets */
+
+        for ( i = 0; i < MAX_WEBSOCK_CLIENTS; i++ ) {
+            if ( websock_clients[i].handle == NULL ) {
+                ESP_LOGI( TAG, "Have a new client, %d now", i + 1 );
+                websock_clients[i].handle = req->handle;
+                websock_clients[i].descriptor = httpd_req_to_sockfd( req );
+                req->sess_ctx = (void *)&websock_clients[i];
+                req->free_ctx = websocket_close_free_ctx;
+                next_log_time = 0; // send update immediately
+                return ESP_OK;
+            }
+        }
+		ESP_LOGW( TAG, "Already have %d clients, accepting without tracking", MAX_WEBSOCK_CLIENTS );
+		return ESP_OK;
 	}
 
 	httpd_ws_frame_t ws_pkt;
 	uint8_t *buf = NULL;
-	memset( &ws_pkt, 0, sizeof( httpd_ws_frame_t ) );
-	ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+	esp_err_t handler_ret = ESP_OK;
+    memset( &ws_pkt, 0, sizeof( httpd_ws_frame_t ) );
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
 	/* Set max_len = 0 to get the frame len */
 	esp_err_t ret = httpd_ws_recv_frame( req, &ws_pkt, 0 );
 
@@ -241,46 +348,67 @@ static esp_err_t get_ws_handler( httpd_req_t *req ) {
 		ret = httpd_ws_recv_frame( req, &ws_pkt, ws_pkt.len );
 		if ( ret != ESP_OK ) {
 			ESP_LOGE( TAG, "httpd_ws_recv_frame failed with %d", ret );
-			free( buf );
-			return ret;
+			handler_ret = ret;
+			goto cleanup;
 		}
-		ESP_LOGV(TAG, "Got packet with message: %s", ws_pkt.payload);
-		switch ( ws_pkt.payload[0] ) {
-		case 'D':
-			heater_status.target -= HEATER_WEB_STEP;
-			heater_status.update = true;
-			next_log_time = 0; // send update immediately
-			break;
+    /* Handle WebSocket control frames */
+    if ( ws_pkt.type == HTTPD_WS_TYPE_PING ) {
+        ws_pkt.type = HTTPD_WS_TYPE_PONG;
+        (void)httpd_ws_send_frame( req, &ws_pkt );
+        goto cleanup;
+    }
+    if ( ws_pkt.type == HTTPD_WS_TYPE_CLOSE ) {
+        goto cleanup;
+    }
 
-		case 'E':
-			heater_status.target -= HEATER_WEB_STEP * 10;
-			heater_status.update = true;
-			next_log_time = 0; // send update immediately
-			break;
-
-		case 'U':
-			heater_status.target += HEATER_WEB_STEP;
-			heater_status.update = true;
-			next_log_time = 0; // send update immediately
-			break;
-
-		case 'V':
-			heater_status.target += HEATER_WEB_STEP * 10;
-			heater_status.update = true;
-			next_log_time = 0; // send update immediately
-			break;
-
-		case 'S':
-#ifdef ENABLE_LOG
-			if ( strcmp( (char *)ws_pkt.payload, "SavePoints" ) == 0 ) {
-				stats_save();
+    ESP_LOGV( TAG, "Got packet with message: %s", ws_pkt.payload ? (char*)ws_pkt.payload : "<null>" );
+		if ( ws_pkt.payload[0] == '{' ) {
+			handler_ret = heater_config_apply_json( (const char *)ws_pkt.payload );
+			if ( handler_ret != ESP_OK ) {
+				ESP_LOGW( TAG, "Failed to apply config update: %s", esp_err_to_name( handler_ret ) );
+			} else {
+				next_log_time = 0;
 			}
+		} else {
+			switch ( ws_pkt.payload[0] ) {
+			case 'D':
+				apply_override_delta( -HEATER_WEB_STEP );
+				break;
+
+			case 'E':
+				apply_override_delta( -HEATER_WEB_STEP * 10 );
+				break;
+
+			case 'U':
+				apply_override_delta( HEATER_WEB_STEP );
+				break;
+
+			case 'V':
+				apply_override_delta( HEATER_WEB_STEP * 10 );
+				break;
+
+			case 'R':
+				clear_override();
+				break;
+
+			case 'S':
+#ifdef ENABLE_LOG
+				if ( strcmp( (char *)ws_pkt.payload, "SavePoints" ) == 0 ) {
+					stats_save();
+				}
 #endif
-			break;
+				break;
+
+			default:
+				ESP_LOGW( TAG, "Unhandled websocket command: %c", ws_pkt.payload[0] );
+				break;
+			}
 		}
 	}
+
+cleanup:
 	free( buf );
-	return ret;
+	return handler_ret;
 }
 
 /*
@@ -288,12 +416,12 @@ static esp_err_t get_ws_handler( httpd_req_t *req ) {
  */
 
 esp_err_t get_index_handler( httpd_req_t *req ) {
-	size_t readSize = 0;
-	// ESP_ERROR_CHECK(httpd_resp_set_hdr(req, "cache-control", "max-age=1")); // For development
-	ESP_ERROR_CHECK( httpd_resp_set_type( req, "text/html" ) );
-	readSize = read_spiff_buffer( "/data/index.html" );
-	ESP_ERROR_CHECK( httpd_resp_send( req, readBuf, readSize ) );
-	return ESP_OK;
+    size_t readSize = 0;
+    // ESP_ERROR_CHECK(httpd_resp_set_hdr(req, "cache-control", "max-age=1")); // For development
+    ESP_ERROR_CHECK( httpd_resp_set_type( req, "text/html" ) );
+    readSize = read_spiff_buffer( "/data/index.html" );
+    ESP_ERROR_CHECK( httpd_resp_send( req, readBuf, readSize ) );
+    return ESP_OK;
 }
 
 #define IS_FILE_EXT( filename, ext ) \
@@ -497,8 +625,8 @@ static esp_err_t download_get_handler( httpd_req_t *req ) {
 		return ESP_FAIL;
 	}
 
-	ESP_LOGI( TAG, "Sending file : %s (%ld bytes)...", filename, file_stat.st_size );
-	set_content_type_from_file( req, filename );
+    ESP_LOGI( TAG, "Sending file : %s (%ld bytes)...", filename, file_stat.st_size );
+    set_content_type_from_file( req, filename );
 
 	/* Retrieve the pointer to scratch buffer for temporary storage */
 	char *chunk = ( (struct file_server_data *)req->user_ctx )->scratch;
@@ -537,13 +665,14 @@ static esp_err_t download_get_handler( httpd_req_t *req ) {
  */
 
 httpd_handle_t webserver_start( void ) {
-	httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-	httpd_handle_t server = NULL;
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    httpd_handle_t server = NULL;
 
 	/* Use the URI wildcard matching function in order to
 	 * allow the same handler to respond to multiple different
 	 * target URIs which match the wildcard scheme */
-	config.uri_match_fn = httpd_uri_match_wildcard;
+    config.uri_match_fn = httpd_uri_match_wildcard;
+    /* Use default socket, backlog, and purge/keepalive behavior */
 
 	// Initialize structure tracking websockets to clients
 	memset( &websock_clients, 0, sizeof( websock_clients ) );

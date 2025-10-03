@@ -1,6 +1,9 @@
 #ifndef HEATER_H
 #define HEATER_H
 
+#include <stdint.h>
+#include <time.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -36,6 +39,14 @@ struct heater_status {
 	bool update;
 	bool wifi;
 	bool blue;
+	float schedule_target;
+	float scheduled_base_target;
+	bool schedule_is_day;
+	bool preheat_active;
+	int32_t minutes_to_next_transition;
+	bool override_active;
+	float override_target;
+	time_t override_expires;
 };
 
 // global access to heater staus

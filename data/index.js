@@ -6,12 +6,18 @@ const inc = document.getElementById("increment");
 const target = document.getElementById("input");
 const dec = document.getElementById("decrement");
 const dec2 = document.getElementById("decrement2");
+const overrideClear = document.getElementById("override_clear");
 
 const ti_day = document.getElementById("day_time");
 const ta_day = document.getElementById("day_target");
 const ti_nig = document.getElementById("night_time");
 const ta_nig = document.getElementById("night_target");
 const ti_flg = document.getElementById("night_check");
+
+const scheduledTarget = document.getElementById("scheduled_target");
+const scheduleMode = document.getElementById("schedule_mode");
+const scheduleNext = document.getElementById("schedule_next");
+const overrideState = document.getElementById("override_state");
 
 const te_rem = document.getElementById("te_rem");
 const te_fnt = document.getElementById("te_fnt");
@@ -102,6 +108,55 @@ function onMessage(event) {
 	const d = new Date();
 	let text = d.toLocaleString();
 	time.textContent = text;
+
+	if (update.config) {
+		if (update.config.day_start && document.activeElement !== ti_day) {
+			ti_day.value = update.config.day_start;
+		}
+		if (update.config.night_start && document.activeElement !== ti_nig) {
+			ti_nig.value = update.config.night_start;
+		}
+		if (typeof update.config.day_temp === 'number' && document.activeElement !== ta_day) {
+			ta_day.value = update.config.day_temp.toFixed(1);
+		}
+		if (typeof update.config.night_temp === 'number' && document.activeElement !== ta_nig) {
+			ta_nig.value = update.config.night_temp.toFixed(1);
+		}
+		if (typeof update.config.night_enabled === 'boolean') {
+			ti_flg.checked = update.config.night_enabled;
+			ta_nig.disabled = !ti_flg.checked;
+			ti_nig.disabled = !ti_flg.checked;
+		}
+	}
+
+	if (update.schedule) {
+		if (typeof update.schedule.target === 'number') {
+			scheduledTarget.textContent = update.schedule.target.toFixed(1);
+		}
+		let modeLabel = 'Day';
+		if (update.schedule.preheat) {
+			modeLabel = 'Preheat';
+		} else if (!update.schedule.is_day) {
+			modeLabel = 'Night';
+		}
+		scheduleMode.textContent = modeLabel;
+		if (typeof update.schedule.minutes_to_next === 'number') {
+			scheduleNext.textContent = formatMinutes(update.schedule.minutes_to_next);
+		}
+		if (update.schedule.override) {
+			let overrideText = 'Hold';
+			if (typeof update.schedule.override_target === 'number') {
+				overrideText = `Hold ${update.schedule.override_target.toFixed(1)}°C`;
+			}
+			if (update.schedule.override_until) {
+				const until = new Date(update.schedule.override_until * 1000);
+				overrideText += ` until ${until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+			}
+			overrideState.textContent = overrideText;
+		} else {
+			overrideState.textContent = 'Off';
+		}
+	}
 	countRecords();
 	//	retrieve();
 }
@@ -111,6 +166,8 @@ window.addEventListener('load', onLoad);
 function onLoad(event) {
 	initWebSocket();
 	initButtons();
+	ta_nig.disabled = !ti_flg.checked;
+	ti_nig.disabled = !ti_flg.checked;
 	openDb();
 	sleep(5000).then(() => {
 		countRecords();
@@ -129,6 +186,7 @@ function initButtons() {
 	document.getElementById('night_time').addEventListener('change', day_night);
 	document.getElementById('night_target').addEventListener('change', day_night);
 	document.getElementById('night_check').addEventListener('change', day_night);
+	overrideClear.addEventListener('click', clearOverride);
 }
 
 function decrement() {
@@ -148,14 +206,43 @@ function increment2() {
 }
 
 function day_night() {
-let message = [];
-message.push('check',ti_flg.checked);
-message.push('daytime',ti_day.value);
-message.push('daytarget',ta_day.value);
-message.push('nighttime',ti_nig.value);
-message.push('nighttarget',ta_nig.value);
-websocket.send(JSON.stringify(message));
+ta_nig.disabled = !ti_flg.checked;
+ti_nig.disabled = !ti_flg.checked;
+const payload = {
+	type: 'schedule',
+	day_start: ti_day.value,
+	night_start: ti_nig.value,
+	day_temp: parseFloat(ta_day.value),
+	night_temp: parseFloat(ta_nig.value),
+	night_enabled: ti_flg.checked
 };
+if (Number.isNaN(payload.day_temp)) {
+	delete payload.day_temp;
+}
+if (Number.isNaN(payload.night_temp)) {
+	delete payload.night_temp;
+}
+websocket.send(JSON.stringify(payload));
+};
+
+function clearOverride() {
+	websocket.send('R');
+}
+
+function formatMinutes(minutes) {
+	if (typeof minutes !== 'number' || minutes < 0) {
+		return '--';
+	}
+	if (minutes >= 1440) {
+		return '>24h';
+	}
+	const hrs = Math.floor(minutes / 60);
+	const mins = minutes % 60;
+	if (hrs === 0) {
+		return `${mins} min`;
+	}
+	return `${hrs}h ${mins.toString().padStart(2, '0')}m`;
+}
 
 const DB_NAME = 'Snapshots';
 const DB_VERSION = 1;

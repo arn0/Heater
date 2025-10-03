@@ -28,6 +28,7 @@
 #include "gpio_pins.h"
 #include "spi_lcd.h"
 #include "clock.h"
+#include "config.h"
 #include "../../secret.h"
 
 extern void real_time_stats( void );
@@ -49,6 +50,11 @@ void app_main( void ) {
 
    ESP_ERROR_CHECK( spiffs_init( "/data" ) ); // Initialize SPIFFS which holds the HTML/CSS/JS files we serve to client browser
                                               // and to store statistics file
+
+   esp_err_t cfg_ret = heater_config_load();
+   if ( cfg_ret != ESP_OK ) {
+      ESP_LOGW( TAG, "Failed to load configuration, using defaults" );
+   }
 #ifdef DO_NOT_DO_THIS
    real_time_stats();
 #endif

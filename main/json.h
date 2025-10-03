@@ -10,7 +10,7 @@ namespace MyJsonNamespace {
 	class MyJsonClass {
 	public:
 		JsonDocument doc;
-		char json_string[256 + 64];
+		char json_string[1024];
 		time_t Jnow;
 
 		// Constructor
