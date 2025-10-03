@@ -11,7 +11,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
-#include "spi_flash_mmap.h"
+//#include "spi_flash_mmap.h"
 #include <sys/stat.h>
 #include <esp_http_server.h>
 #include "nvs_flash.h"

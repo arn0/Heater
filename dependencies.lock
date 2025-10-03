@@ -6,25 +6,25 @@ dependencies:
       require: private
       version: '>=4.1'
     source:
-      registry_url: https://components.espressif.com/
+      registry_url: https://components.espressif.com
       type: service
     version: 0.5.3
   espressif/ds18b20:
-    component_hash: d676429d9f1f686b65ed895e418eb4b331477bcd5d63c27f43dc3d6a2de8f13b
+    component_hash: 9792f38a20eb2fe7435cba349e3b4b7085381f05400233aacd849ced69e2207f
     dependencies:
     - name: espressif/onewire_bus
-      registry_url: https://components.espressif.com/
+      registry_url: https://components.espressif.com
       require: private
       version: ^1.0.0
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 0.1.1
+    version: 0.2.0
   espressif/esp_lcd_gc9a01:
-    component_hash: 9a6877a69d44729fa3f4aa6fa462cf1a9b47cd16d737e1a5191e5cf78437c7ee
+    component_hash: e60bc2b5649c7679bd010797a875ae64b2a57cf9cdbd6a2bf7a0ade66913edc0
     dependencies:
     - name: espressif/cmake_utilities
-      registry_url: https://components.espressif.com/
+      registry_url: https://components.espressif.com
       require: private
       version: 0.*
     - name: idf
@@ -33,19 +33,19 @@ dependencies:
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 2.0.0
+    version: 2.0.4
   espressif/led_strip:
-    component_hash: 28c6509a727ef74925b372ed404772aeedf11cce10b78c3f69b3c66799095e2d
+    component_hash: 223998f10cae6d81f2ad2dd3c1103c2221be298c708e37917482b0153f3ec64e
     dependencies:
     - name: idf
       require: private
-      version: '>=4.4'
+      version: '>=5.0'
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 2.5.5
+    version: 3.0.1~1
   espressif/mdns:
-    component_hash: af6306fe65d637a3683d1cf671508fcedd6b05f9ca029a8815abeab64001fb8d
+    component_hash: 3ec0af5f6bce310512e90f482388d21cc7c0e99668172d2f895356165fc6f7c5
     dependencies:
     - name: idf
       require: private
@@ -53,9 +53,9 @@ dependencies:
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 1.4.0
+    version: 1.8.2
   espressif/onewire_bus:
-    component_hash: c4c781940d8bd988432b47ac3ee68479c69e14e01fdfba0b61365b233a3ba5d6
+    component_hash: 11729fd9a5de80225177a61e9cd77de91683b8ec300e83710d5327b666dbe884
     dependencies:
     - name: idf
       require: private
@@ -63,11 +63,11 @@ dependencies:
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 1.0.2
+    version: 1.0.4
   idf:
     source:
       type: idf
-    version: 5.3.1
+    version: 5.5.1
   lvgl/lvgl:
     component_hash: 948bff879a345149b83065535bbc4a026ce9f47498a22881e432a264b9098015
     dependencies: []
@@ -78,7 +78,7 @@ dependencies:
   nimble_central_utils:
     dependencies: []
     source:
-      path: /Users/arno/esp/v5.3.1/esp-idf/examples/bluetooth/nimble/common/nimble_central_utils
+      path: /Users/arno/esp/v5.5.1/esp-idf/examples/bluetooth/nimble/common/nimble_central_utils
       type: local
     version: '*'
 direct_dependencies:

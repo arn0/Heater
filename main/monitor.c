@@ -199,7 +199,7 @@ bool monitor_task_start() {
 		if ( search_result == ESP_OK ) { // found a new device, let's check if we can upgrade it to a DS18B20
 			ds18b20_config_t ds_cfg = {};
 			// check if the device is a DS18B20, if so, return the ds18b20 handle
-			if ( ds18b20_new_device( &next_onewire_device, &ds_cfg, &ds18b20s[ds18b20_device_num] ) == ESP_OK ) {
+			if ( ds18b20_new_device_from_enumeration( &next_onewire_device, &ds_cfg, &ds18b20s[ds18b20_device_num] ) == ESP_OK ) {
 				ESP_LOGI( TAG, "Found a DS18B20[%d], address: %016llX", ds18b20_device_num, next_onewire_device.address );
 				// Match the found sensors to the position these are mounted
 				switch ( next_onewire_device.address ) {
