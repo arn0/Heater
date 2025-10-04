@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radiator – Nieuwe grafiek</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #111;
+      --muted: #666;
+      --accent: #8C3636;
+      --room: #d22;
+      --target: #b0b;
+      --power: #1e88e5;
+      --stage1: rgba(255, 160, 0, 0.10);
+      --stage2: rgba(239, 83, 80, 0.12);
+      --grid: #e6e6e6;
+    }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    header { display:flex; align-items:center; gap:12px; padding: 10px 12px; border-bottom: 1px solid #ddd; }
+    header a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    header a:hover { text-decoration: underline; }
+    h1 { font-size: 18px; margin: 0; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding: 10px 12px; font-size: 14px; color: var(--muted); }
+    .toolbar label { display:flex; align-items:center; gap:6px; }
+    .toolbar select { font-size: 14px; }
+    .wrap { padding: 0 8px 12px; }
+    #canvasWrap { position: relative; height: 60vh; max-height: 520px; border-top: 1px solid #eee; border-bottom: 1px solid #eee; background: #fff; }
+    canvas { width: 100%; height: 100%; display: block; }
+    .legend { display:flex; gap:16px; align-items:center; padding: 8px 12px; font-size: 13px; color: var(--muted); }
+    .swatch { width:12px; height:12px; border-radius:2px; display:inline-block; margin-right:6px; }
+    .hint { padding: 6px 12px; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="index.html">Home</a>
+    <span style="opacity:.35">/</span>
+    <a href="graph.html">Klassieke grafiek</a>
+    <h1 style="margin-left:auto">Nieuwe grafiek</h1>
+  </header>
+
+  <div class="toolbar">
+    <label><input type="checkbox" id="showRoom" checked> Kamer</label>
+    <label><input type="checkbox" id="showTarget" checked> Doel</label>
+    <label><input type="checkbox" id="showPower" checked> Vermogen</label>
+    <label><input type="checkbox" id="showStages" checked> Stadia I/II</label>
+
+    <label style="margin-left:auto">Tijd:
+      <select id="timeWindow">
+        <option value="1">1 uur</option>
+        <option value="6" selected>6 uur</option>
+        <option value="24">24 uur</option>
+        <option value="72">3 dagen</option>
+        <option value="168">7 dagen</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="wrap">
+    <div id="canvasWrap">
+      <canvas id="chartCanvas"></canvas>
+    </div>
+    <div class="legend">
+      <span><span class="swatch" style="background: var(--room)"></span>Kamer</span>
+      <span><span class="swatch" style="background: var(--target)"></span>Doel</span>
+      <span><span class="swatch" style="background: var(--power)"></span>Vermogen (W)</span>
+    </div>
+    <div class="hint">Zoomen: scroll/knijp. Pannen: slepen. Dubbelklik om te resetten.</div>
+  </div>
+
+  <script src="chart-n.js" type="module"></script>
+</body>
+</html>
+

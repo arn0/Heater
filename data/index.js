@@ -1,3 +1,4 @@
+// DOM refs
 const indicator1 = document.getElementById("indicator1");
 const indicator2 = document.getElementById("indicator2");
 
@@ -34,15 +35,28 @@ const pf = document.getElementById("pf");
 
 const wifi = document.getElementById("wifi");
 const blue = document.getElementById("blue");
-const matt = document.getElementById("matt");
 
-const time = document.getElementById("time");
-const container = document.getElementById("container");
+const timeEl = document.getElementById("time");
+const statusLine = document.getElementById("status_line");
+const offlineBanner = document.getElementById("offline_banner");
+const toast = document.getElementById("toast");
+const themeToggle = document.getElementById("themeToggle");
+const spark = document.getElementById("spark_rem");
 
 var gateway = `ws://${window.location.hostname}/ws`;
 //var gateway = `ws://heater.local/ws`;
 var websocket;
 var update;
+
+// reconnect backoff (1s -> 2s -> 5s capped)
+const backoffSteps = [1000, 2000, 5000, 5000, 5000];
+let backoffIndex = 0;
+
+// Coalesced rendering to <=10Hz
+let pending = null;
+let rafPending = false;
+let lastFrame = 0;
+let lastSparkTs = 0;
 
 function sleep(ms) {
 	return new Promise(resolve => setTimeout(resolve, ms));
@@ -50,21 +64,34 @@ function sleep(ms) {
 
 function initWebSocket() {
 	console.log('Trying to open a WebSocket connection...');
-	websocket = new WebSocket(gateway);
-	websocket.onopen = onOpen;
-	websocket.onclose = onClose;
-	websocket.onmessage = onMessage;
+	try {
+		websocket = new WebSocket(gateway);
+		websocket.onopen = onOpen;
+		websocket.onclose = onClose;
+		websocket.onmessage = onMessage;
+	} catch (_) {
+		scheduleReconnect();
+	}
 }
 
 function onOpen(event) {
 	console.log('Connection opened');
 	wifi.style.background = '#00c4fa';
+	if (offlineBanner) offlineBanner.hidden = true;
+	backoffIndex = 0;
+	setStatus('Verbonden');
 }
 
 function onClose(event) {
 	console.log('Connection closed');
 	wifi.style.background = '#BEBEBE';
-	setTimeout(initWebSocket, 2000);
+	if (offlineBanner) offlineBanner.hidden = false;
+	setStatus('Offline – opnieuw verbinden…');
+	scheduleReconnect();
+}
+function scheduleReconnect() {
+	const delay = backoffSteps[Math.min(backoffIndex++, backoffSteps.length - 1)];
+	setTimeout(initWebSocket, delay);
 }
 var testarray = [];
 var counter = 0;
@@ -72,93 +99,8 @@ var counter = 0;
 function onMessage(event) {
 	update = JSON.parse(event.data);
 	addSnapshot(update);
-	//console.log(event.data);
-	//console.log(update);
-	//testarray.push(update);
-	//console.log(new Date(update.time * 1000).toLocaleString());
-	//console.log(new Date(testarray[counter++].time * 1000).toLocaleString());
-
-	te_rem.textContent = update.rem.toFixed(1);
-	te_fnt.textContent = update.fnt.toFixed(1);
-	te_bck.textContent = update.bck.toFixed(1);
-	te_top.textContent = update.top.toFixed(1);
-	te_bot.textContent = update.bot.toFixed(1);
-	te_chp.textContent = update.chip.toFixed(1);
-	target.textContent = update.target.toFixed(1);
-	volt.textContent = update.voltage.toFixed(1);
-	amp.textContent = update.current.toFixed(3);
-	watt.textContent = update.power.toFixed(1);
-	kwh.textContent = update.energy.toFixed(2);
-	pf.textContent = update.pf.toFixed(3);
-	if (update.one_pwr) {
-		indicator1.className = 'indicator-on';
-	} else {
-		indicator1.className = 'indicator-off';
-	}
-	if (update.two_pwr) {
-		indicator2.className = 'indicator-on';
-	} else {
-		indicator2.className = 'indicator-off';
-	}
-	if (update.blue) {
-		blue.style.background = '#00c4fa';
-	} else {
-		blue.style.background = '#BEBEBE';
-	}
-	const d = new Date();
-	let text = d.toLocaleString();
-	time.textContent = text;
-
-	if (update.config) {
-		if (update.config.day_start && document.activeElement !== ti_day) {
-			ti_day.value = update.config.day_start;
-		}
-		if (update.config.night_start && document.activeElement !== ti_nig) {
-			ti_nig.value = update.config.night_start;
-		}
-		if (typeof update.config.day_temp === 'number' && document.activeElement !== ta_day) {
-			ta_day.value = update.config.day_temp.toFixed(1);
-		}
-		if (typeof update.config.night_temp === 'number' && document.activeElement !== ta_nig) {
-			ta_nig.value = update.config.night_temp.toFixed(1);
-		}
-		if (typeof update.config.night_enabled === 'boolean') {
-			ti_flg.checked = update.config.night_enabled;
-			ta_nig.disabled = !ti_flg.checked;
-			ti_nig.disabled = !ti_flg.checked;
-		}
-	}
-
-	if (update.schedule) {
-		if (typeof update.schedule.target === 'number') {
-			scheduledTarget.textContent = update.schedule.target.toFixed(1);
-		}
-		let modeLabel = 'Day';
-		if (update.schedule.preheat) {
-			modeLabel = 'Preheat';
-		} else if (!update.schedule.is_day) {
-			modeLabel = 'Night';
-		}
-		scheduleMode.textContent = modeLabel;
-		if (typeof update.schedule.minutes_to_next === 'number') {
-			scheduleNext.textContent = formatMinutes(update.schedule.minutes_to_next);
-		}
-		if (update.schedule.override) {
-			let overrideText = 'Hold';
-			if (typeof update.schedule.override_target === 'number') {
-				overrideText = `Hold ${update.schedule.override_target.toFixed(1)}°C`;
-			}
-			if (update.schedule.override_until) {
-				const until = new Date(update.schedule.override_until * 1000);
-				overrideText += ` until ${until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-			}
-			overrideState.textContent = overrideText;
-		} else {
-			overrideState.textContent = 'Off';
-		}
-	}
-	countRecords();
-	//	retrieve();
+	pending = update;
+	scheduleRender();
 }
 
 window.addEventListener('load', onLoad);
@@ -168,12 +110,13 @@ function onLoad(event) {
 	initButtons();
 	ta_nig.disabled = !ti_flg.checked;
 	ti_nig.disabled = !ti_flg.checked;
+	initTheme();
 	openDb();
 	sleep(5000).then(() => {
 		countRecords();
 		oldRecord();
 	});
-	sleep(10000).then(() => { reduceData(); });
+	sleep(10000).then(() => { reduceData(); drawSpark(); });
 }
 
 function initButtons() {
@@ -187,6 +130,11 @@ function initButtons() {
 	document.getElementById('night_target').addEventListener('change', day_night);
 	document.getElementById('night_check').addEventListener('change', day_night);
 	overrideClear.addEventListener('click', clearOverride);
+	const qaB30 = document.getElementById('qa_boost30'); if (qaB30) qaB30.addEventListener('click', () => quickBoost(30));
+	const qaB60 = document.getElementById('qa_boost60'); if (qaB60) qaB60.addEventListener('click', () => quickBoost(60));
+	const qaEco = document.getElementById('qa_eco'); if (qaEco) qaEco.addEventListener('click', () => { websocket.send('D'); showToast('Eco −0,1°'); });
+	const qaRes = document.getElementById('qa_resume'); if (qaRes) qaRes.addEventListener('click', clearOverride);
+	if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
 }
 
 function decrement() {
@@ -222,11 +170,11 @@ if (Number.isNaN(payload.day_temp)) {
 if (Number.isNaN(payload.night_temp)) {
 	delete payload.night_temp;
 }
-websocket.send(JSON.stringify(payload));
+try { websocket.send(JSON.stringify(payload)); showToast('Opgeslagen'); } catch (_) { showToast('Mislukt', true); }
 };
 
 function clearOverride() {
-	websocket.send('R');
+	try { websocket.send('R'); showToast('Schema hervat'); } catch (_) { showToast('Mislukt', true); }
 }
 
 function formatMinutes(minutes) {
@@ -234,14 +182,14 @@ function formatMinutes(minutes) {
 		return '--';
 	}
 	if (minutes >= 1440) {
-		return '>24h';
+		return '>24u';
 	}
 	const hrs = Math.floor(minutes / 60);
 	const mins = minutes % 60;
 	if (hrs === 0) {
 		return `${mins} min`;
 	}
-	return `${hrs}h ${mins.toString().padStart(2, '0')}m`;
+	return `${hrs}u ${mins.toString().padStart(2, '0')}m`;
 }
 
 const DB_NAME = 'Snapshots';
@@ -637,5 +585,183 @@ function retrieve(){
 
 
 function getTimestampInSeconds() {
-	return Math.floor(Date.now() / 1000)
+  return Math.floor(Date.now() / 1000)
+}
+
+// UI helpers
+function setStatus(text) { if (statusLine) statusLine.textContent = text; }
+
+function scheduleRender() {
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(ts => {
+    rafPending = false;
+    if (ts - lastFrame < 100) return scheduleRender();
+    lastFrame = ts;
+    if (!pending) return;
+    applySnapshot(pending);
+    if (ts - lastSparkTs > 30000) { lastSparkTs = ts; drawSpark(); }
+  });
+}
+
+function applySnapshot(update) {
+  if (!update) return;
+  te_rem.textContent = update.rem.toFixed(1);
+  te_fnt.textContent = update.fnt.toFixed(1);
+  te_bck.textContent = update.bck.toFixed(1);
+  te_top.textContent = update.top.toFixed(1);
+  te_bot.textContent = update.bot.toFixed(1);
+  te_chp.textContent = update.chip.toFixed(1);
+  target.textContent = update.target.toFixed(1);
+  volt.textContent = update.voltage.toFixed(1);
+  amp.textContent = update.current.toFixed(3);
+  watt.textContent = update.power.toFixed(1);
+  kwh.textContent = update.energy.toFixed(2);
+  if (pf) pf.textContent = update.pf.toFixed(3);
+
+  indicator1.className = update.one_pwr ? 'stage-pill indicator-on' : 'stage-pill indicator-off';
+  indicator2.className = update.two_pwr ? 'stage-pill indicator-on' : 'stage-pill indicator-off';
+  blue.style.background = update.blue ? '#00c4fa' : '#6d7e90';
+
+  const d = (typeof update.time === 'number') ? new Date(update.time * 1000) : new Date();
+  let text = d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  timeEl.textContent = text;
+
+  if (update.config) {
+    if (update.config.day_start && document.activeElement !== ti_day) {
+      ti_day.value = update.config.day_start;
+    }
+    if (update.config.night_start && document.activeElement !== ti_nig) {
+      ti_nig.value = update.config.night_start;
+    }
+    if (typeof update.config.day_temp === 'number' && document.activeElement !== ta_day) {
+      ta_day.value = update.config.day_temp.toFixed(1);
+    }
+    if (typeof update.config.night_temp === 'number' && document.activeElement !== ta_nig) {
+      ta_nig.value = update.config.night_temp.toFixed(1);
+    }
+    if (typeof update.config.night_enabled === 'boolean') {
+      ti_flg.checked = update.config.night_enabled;
+      ta_nig.disabled = !ti_flg.checked;
+      ti_nig.disabled = !ti_flg.checked;
+    }
+  }
+
+  if (update.schedule) {
+    if (typeof update.schedule.target === 'number') {
+      scheduledTarget.textContent = update.schedule.target.toFixed(1);
+    }
+    let modeLabel = 'Dag';
+    if (update.schedule.preheat) {
+      modeLabel = 'Voorverwarmen';
+    } else if (!update.schedule.is_day) {
+      modeLabel = 'Nacht';
+    }
+    scheduleMode.textContent = modeLabel;
+    if (typeof update.schedule.minutes_to_next === 'number') {
+      scheduleNext.textContent = formatMinutes(update.schedule.minutes_to_next);
+    }
+    if (update.schedule.override) {
+      // Localized override text (Dutch)
+      let overrideText = 'Handmatig';
+      if (typeof update.schedule.override_target === 'number') {
+        overrideText = `Handmatig ${update.schedule.override_target.toFixed(1)} °C`;
+      }
+      if (update.schedule.override_until) {
+        const until = new Date(update.schedule.override_until * 1000);
+        overrideText += ` tot ${until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      }
+      overrideState.textContent = overrideText;
+    } else {
+      overrideState.textContent = 'Uit';
+    }
+  }
+  countRecords();
+}
+
+// Sparkline (last 60 minutes). Shows Room and Target.
+function drawSpark() {
+  if (!spark || !db) return;
+  const ctx = spark.getContext('2d');
+  const w = spark.width, h = spark.height;
+  ctx.clearRect(0,0,w,h);
+  const high = getTimestampInSeconds();
+  const low = high - 60*60; // 60 min
+  const range = IDBKeyRange.bound(low, high, false, true);
+  const tx = db.transaction(['snapshots'], 'readonly');
+  const store = tx.objectStore('snapshots');
+  const req = store.openCursor(range);
+  const pts = [];
+  req.onsuccess = (e) => {
+    const c = e.target.result;
+    if (c) { pts.push({ t: c.value.time * 1000, rem: c.value.rem, tgt: c.value.target }); c.continue(); }
+    else {
+      if (pts.length < 2) return;
+      pts.sort((a,b)=>a.t-b.t);
+      const t0 = pts[0].t, t1 = pts[pts.length-1].t;
+      // bounds across both series
+      let vMin = Infinity, vMax = -Infinity;
+      for (const p of pts) { vMin = Math.min(vMin, p.rem, p.tgt); vMax = Math.max(vMax, p.rem, p.tgt); }
+      if (!(isFinite(vMin)&&isFinite(vMax)) || vMin===vMax) { vMin=18; vMax=22; }
+      // baseline
+      ctx.strokeStyle = '#233040'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(4, h-4); ctx.lineTo(w-4, h-4); ctx.stroke();
+      // room
+      ctx.strokeStyle = '#ff7b7b'; ctx.lineWidth = 2; ctx.beginPath();
+      pts.forEach((p,i)=>{
+        const x = (p.t - t0) / Math.max(1, t1 - t0) * (w-8) + 4;
+        const y = h - ((p.rem - vMin) / Math.max(0.001,(vMax - vMin))) * (h-8) - 4;
+        if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+      // target
+      ctx.strokeStyle = '#d0a0ff'; ctx.lineWidth = 2; ctx.beginPath();
+      pts.forEach((p,i)=>{
+        const x = (p.t - t0) / Math.max(1, t1 - t0) * (w-8) + 4;
+        const y = h - ((p.tgt - vMin) / Math.max(0.001,(vMax - vMin))) * (h-8) - 4;
+        if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+    }
+  };
+}
+
+// Quick boost shortcuts – requires firmware support for duration; here we just nudge target to ensure hold
+function quickBoost(mins) {
+  try {
+    websocket.send('U'); // nudge up 0.1 and extend override window in firmware
+    showToast(`Boost ${mins}m (vereist FW)`);
+  } catch (_) { showToast('Mislukt', true); }
+}
+
+// Theme handling
+function initTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.setAttribute('data-theme','dark');
+    themeToggle && themeToggle.setAttribute('aria-pressed','true');
+  }
+}
+function toggleTheme() {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  if (dark) {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('theme','light');
+    themeToggle && themeToggle.setAttribute('aria-pressed','false');
+  } else {
+    document.documentElement.setAttribute('data-theme','dark');
+    localStorage.setItem('theme','dark');
+    themeToggle && themeToggle.setAttribute('aria-pressed','true');
+  }
+}
+
+// Toasts
+let toastTimer;
+function showToast(text, error=false) {
+  if (!toast) return;
+  toast.textContent = text;
+  toast.style.background = error ? '#5c2121' : '#1b2a3a';
+  toast.style.border = '1px solid #2f3b48';
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ toast.hidden = true; }, 1600);
 }

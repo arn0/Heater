@@ -149,14 +149,36 @@ static void websocket_close_free_ctx( void *ctx ) {
 }
 
 esp_err_t send_sensor_update_frame( char *buffer, size_t client ) {
-	httpd_ws_frame_t ws_frame = {
-		 .final = true,
-		 .fragmented = false,
-		 .type = HTTPD_WS_TYPE_TEXT,
-		 .payload = (uint8_t *)buffer,
-		 .len = strlen( buffer ) };
+	if ( client >= MAX_WEBSOCK_CLIENTS ) {
+		return ESP_ERR_INVALID_ARG;
+	}
+	if ( websock_clients[client].handle == NULL ) {
+		return ESP_ERR_INVALID_STATE;
+	}
 
-	ESP_ERROR_CHECK( httpd_ws_send_frame_async( websock_clients[client].handle, websock_clients[client].descriptor, &ws_frame ) );
+	/* Verify that the FD is still a WS client before sending */
+	httpd_ws_client_info_t st = httpd_ws_get_fd_info( websock_clients[client].handle, websock_clients[client].descriptor );
+	if ( st != HTTPD_WS_CLIENT_WEBSOCKET ) {
+		ESP_LOGW( TAG, "WS client %d not in WEBSOCKET state (%d) — cleaning up", (int)websock_clients[client].descriptor, (int)st );
+		socket_close_cleanup( &websock_clients[client] );
+		return ESP_ERR_INVALID_STATE;
+	}
+
+	httpd_ws_frame_t ws_frame = {
+		.final = true,
+		.fragmented = false,
+		.type = HTTPD_WS_TYPE_TEXT,
+		.payload = (uint8_t *)buffer,
+		.len = strlen( buffer )
+	};
+
+	esp_err_t err = httpd_ws_send_frame_async( websock_clients[client].handle, websock_clients[client].descriptor, &ws_frame );
+	if ( err != ESP_OK ) {
+		ESP_LOGW( TAG, "httpd_ws_send_frame_async failed for fd %d: %s", (int)websock_clients[client].descriptor, esp_err_to_name( err ) );
+		/* Drop this client slot so we stop sending to dead sockets */
+		socket_close_cleanup( &websock_clients[client] );
+		return err;
+	}
 	return ESP_OK;
 }
 

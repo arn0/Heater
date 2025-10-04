@@ -1,113 +1,150 @@
 <!doctype html>
-<html>
-
+<html lang="nl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Radiator</title>
+  <!-- Keep D3 for existing reduceData() usage in index.js -->
   <script src="https://d3js.org/d3.v5.min.js"></script>
-  <script src="index.js" type="module" defer="defer"></script>
   <link rel="stylesheet" type="text/css" href="index.css">
+  <script src="index.js" type="module" defer></script>
+  <link rel="icon" href="favicon.ico">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0e1217">
 </head>
 
 <body>
-  <div>
-    <h1>Radiator</h1>
-    <div class="indicators">
-      <div id="indicator1" class="indicator-off">I</div>
-      <div id="indicator2" class="indicator-off">II</div>
+  <div id="offline_banner" role="status" aria-live="polite" hidden>Offline – opnieuw verbinden…</div>
+
+  <header class="topbar" role="banner">
+    <div class="brand">Radiator</div>
+    <div class="center-icons" aria-hidden="false">
+      <div id="wifi" class="icon icon-wifi" aria-label="Wi‑Fi status" role="img"></div>
+      <div id="blue" class="icon icon-bluetooth" aria-label="Bluetooth status" role="img"></div>
     </div>
-    <h2>Temperatuur</h2>
-    <div class="buttons">
-      <button id="decrement2">-</button>
-      <button id="decrement">-</button>
-      <button id="input" style="min-width:100px;">--.-</button>
-      <button id="increment">+</button>
-      <button id="increment2">+</button>
-      <button id="override_clear">reset</button>
+    <div class="status">
+      <button id="themeToggle" class="chip" aria-pressed="false" title="Schakel donker/licht">🌙</button>
     </div>
-    <div class="temprow">
-      <div>Dag:</div>
-      <input type="time" id="day_time" value="07:00" step="900">
-      <input type="number" id="day_target" value="20.0" min="1" max="25" step="0.1">
-      <div>&degC</div>
-      <div>Nacht:</div>
-      <input type="time" id="night_time" value="23:00" step="900">
-      <input type="number" id="night_target" value="20.0" min="1" max="25" step="0.1">
-      <div>&degC</div>
-      <input type="checkbox" id="night_check">
+  </header>
+
+  <main class="layout" role="main">
+    <!-- Now -->
+    <section class="card" aria-labelledby="nowTitle">
+      <div class="card-title" id="nowTitle">Nu</div>
+
+      <div class="section">
+        <div class="section-title">Temperatuur</div>
+        <div class="grid grid-2 temps">
+          <div class="kv"><div>Ruimte</div><div id="te_rem">--.-</div><span class="unit">°C</span></div>
+          <div class="kv"><div>Front</div><div id="te_fnt">--.-</div><span class="unit">°C</span></div>
+          <div class="kv"><div>Achter</div><div id="te_bck">--.-</div><span class="unit">°C</span></div>
+          <div class="kv"><div>Boven</div><div id="te_top">--.-</div><span class="unit">°C</span></div>
+          <div class="kv"><div>Onder</div><div id="te_bot">--.-</div><span class="unit">°C</span></div>
+          <div class="kv"><div>Chip</div><div id="te_chp">--.-</div><span class="unit">°C</span></div>
+        </div>
       </div>
-    <div class="timerow">
-      <div>Schedule:&nbsp;</div>
-      <div id="scheduled_target">-</div>
-      <div>&nbsp;&nbsp;Mode:&nbsp;</div>
-      <div id="schedule_mode">-</div>
-      <div>&nbsp;&nbsp;Next:&nbsp;</div>
-      <div id="schedule_next">-</div>
-    </div>
-    <div class="timerow">
-      <div>Override:&nbsp;</div>
-      <div id="override_state">-</div>
-    </div>
-    <div class="datarow">
-      <div>remote<br>
-        <div id="te_rem">--.-</div>
+
+      <div class="section">
+        <div class="section-title">Energie</div>
+        <div class="grid grid-2">
+          <div class="kv"><div>Spanning</div><div id="volt">---.-</div><span class="unit">V</span></div>
+          <div class="kv"><div>Stroom</div><div id="amp">-.-</div><span class="unit">A</span></div>
+          <div class="kv"><div>Vermogen</div><div id="watt">----.-</div><span class="unit">W</span></div>
+          <div class="kv"><div>Energie</div><div id="kwh">----.-</div><span class="unit">kWh</span></div>
+        </div>
       </div>
-      <div>voor<br>
-        <div id="te_fnt">--.-</div>
+
+      <div class="section">
+        <div class="section-title">Elementen</div>
+        <div class="stages">
+          <div id="indicator1" class="stage-pill indicator-off" aria-live="polite">I</div>
+          <div id="indicator2" class="stage-pill indicator-off" aria-live="polite">II</div>
+        </div>
       </div>
-      <div>achter<br>
-        <div id="te_bck">--.-</div>
+
+      <div class="section">
+        <div class="section-title">Laatste 60 min</div>
+        <div class="spark-wrap"><canvas id="spark_rem" width="600" height="120" aria-label="Temperatuur sparkline"></canvas></div>
       </div>
-      <div>boven<br>
-        <div id="te_top">--.-</div>
+    </section>
+
+    <!-- Control -->
+    <section class="card" aria-labelledby="ctrlTitle">
+      <div class="card-title" id="ctrlTitle">Instellen</div>
+
+      <div class="section">
+        <div class="section-title">Doel</div>
+        <div class="target-row">
+          <div class="target-wrap"><div id="input" class="target">--.-</div><span class="unit unit-lg">°C</span></div>
+          <div class="stepper">
+            <button class="btn" id="decrement2" aria-label="-1.0">−</button>
+            <button class="btn" id="decrement" aria-label="-0.1">−</button>
+            <button class="btn" id="increment" aria-label="+0.1">+</button>
+            <button class="btn" id="increment2" aria-label="+1.0">+</button>
+          </div>
+        </div>
       </div>
-      <div>onder<br>
-        <div id="te_bot">--.-</div>
+
+      <div class="section">
+        <div class="section-title">Schema</div>
+        <div class="schedule-row">
+          <div class="kv"><div>Modus</div><div id="schedule_mode" class="value chip">-</div></div>
+          <div class="kv"><div>Volgende</div><div id="schedule_next" class="value chip">-</div></div>
+          <div class="kv"><div>Doel</div><div id="scheduled_target" class="value chip">-</div><span class="unit">°C</span></div>
+        </div>
+        <div class="schedule-edit">
+          <div class="row">
+            <label for="day_time">Dag</label>
+            <input type="time" id="day_time" value="07:00" step="900">
+            <input type="number" id="day_target" value="20.0" min="1" max="25" step="0.1">
+            <span class="unit">°C</span>
+          </div>
+          <div class="row">
+            <label for="night_time">Nacht</label>
+            <input type="time" id="night_time" value="23:00" step="900">
+            <input type="number" id="night_target" value="20.0" min="1" max="25" step="0.1">
+            <span class="unit">°C</span>
+            <label class="check"><input type="checkbox" id="night_check"> activeren</label>
+          </div>
+        </div>
       </div>
-      <div>chip<br>
-        <div id="te_chp">--.-</div>
+
+      <div class="section">
+        <div class="section-title">Override</div>
+        <div class="override-row">
+          <div id="override_state" class="chip" aria-live="polite">Uit</div>
+          <button id="override_clear" class="btn btn-secondary">Reset</button>
+        </div>
+        <div class="quick-actions">
+          <button class="btn btn-ghost" id="qa_boost30" title="Boost 30 min">Boost 30m</button>
+          <button class="btn btn-ghost" id="qa_boost60" title="Boost 60 min">Boost 60m</button>
+          <button class="btn btn-ghost" id="qa_eco" title="Eco −1.0°C">Eco −1.0°C</button>
+          <button class="btn btn-ghost" id="qa_resume" title="Hervat schema">Hervat schema</button>
+        </div>
       </div>
-    </div>
-    <h2>Data</h2>
-    <div class="datarow">
-      <div>V<br>
-        <div id="volt">---.-</div>
+
+      <div class="section">
+        <div class="section-title">Status</div>
+        <div class="schedule-row">
+          <div class="kv"><div>Laatste update</div><div id="time" class="value chip" aria-live="polite">--:--:--</div></div>
+        </div>
+        <div id="status_line" class="status-line" aria-live="polite">Verbonden</div>
       </div>
-      <div>A<br>
-        <div id="amp">-.-</div>
-      </div>
-      <div>W<br>
-        <div id="watt">----.-</div>
-      </div>
-      <div>kWh<br>
-        <div id="kwh">----.-</div>
-      </div>
-      <div>PF<br>
-        <div id="pf">-.---</div>
-      </div>
-    </div>
-    <div class="icons">
-      <div id="wifi" class="icon icon-wifi"></div>
-      <div id="blue" class="icon icon-bluetooth"></div>
-      <a href="tools.html">
-        <div id="tool" class="icon icon-tools"></div>
-      </a>
-      <a href="graph.html">
-        <div id="graph" class="icon icon-graph"></div>
-      </a>
-    </div>
-    <div class="timerow">
-      <div>Last update:&nbsp;</div>
-      <div id="time">-</div>
-    </div>
-    <div class="timerow">
-      <div>Records:&nbsp;</div>
-      <div id="count">-</div>
-      <div>&nbsp;&nbsp;Oldest:&nbsp;</div>
-      <div id="old">-</div>
+    </section>
+  </main>
+
+  <div class="footer">
+    <a href="tools.html"><div id="tool" class="icon icon-tools" title="Tools"></div></a>
+    <a href="graph.html"><div id="graph" class="icon icon-graph" title="Klassieke grafiek"></div></a>
+    <a href="chart-n.html" class="link">Nieuwe grafiek</a>
+    <div class="spacer"></div>
+    <div class="meta">
+      <div class="kv"><div>Records</div><div id="count">-</div></div>
+      <div class="kv"><div>Oudste</div><div id="old">-</div></div>
     </div>
   </div>
-</body>
 
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+
+</body>
 </html>
