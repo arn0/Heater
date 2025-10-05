@@ -13,9 +13,10 @@
   --err: #ef5350;
   --chip: #1b2631;
   /* Stage fill colors for sparkline */
-  --stage1: rgba(255, 160, 0, 0.10);
-  --stage2: rgba(239, 83, 80, 0.12);
-  --stageBoth: rgba(239, 83, 80, 0.22);
+  /* Heater stage backdrop (single hue, varying opacity) */
+  --stage1: rgba(239, 83, 80, 0.12);   /* stage 1 (40%) */
+  --stage2: rgba(239, 83, 80, 0.22);   /* stage 2 (60%) */
+  --stageBoth: rgba(239, 83, 80, 0.32);/* both (100%) */
 
   --radius: 12px;
   --shadow: 0 1px 2px rgba(0,0,0,.25), 0 8px 28px rgba(0,0,0,.25);
@@ -30,9 +31,9 @@
     --text: #111;
     --muted: #4c566a;
     --chip: #dfe4eb;
-    --stage1: rgba(255, 160, 0, 0.12);
-    --stage2: rgba(239, 83, 80, 0.14);
-    --stageBoth: rgba(239, 83, 80, 0.24);
+    --stage1: rgba(239, 83, 80, 0.14);
+    --stage2: rgba(239, 83, 80, 0.26);
+    --stageBoth: rgba(239, 83, 80, 0.36);
   }
 }
 
@@ -172,8 +173,14 @@ html, body { margin:0; padding:0; background: var(--bg); color: var(--text); fon
 .icon-matter { mask: url("matter.svg"); -webkit-mask-image: url("matter.svg"); }
 .icon-tools { mask: url("tools.svg"); -webkit-mask-image: url("tools.svg"); }
 .icon-graph { mask: url("graph.svg"); -webkit-mask-image: url("graph.svg"); }
+.icon-upload { mask: url("upload.svg"); -webkit-mask-image: url("upload.svg"); }
 .icon { display:inline-block; width: 24px; height: 24px; background:#6d7e90; mask-size: cover; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; mask-position:center; margin: 6px; border-radius:999px; }
 .icon:hover, .icon:focus { background: #c2d6ff; }
+
+/* In the footer, the flex items are the <a> wrappers for Tools/Graph,
+   but the upload icon is the flex item itself. Remove icon margins so
+   spacing comes solely from the footer's flex gap. */
+.footer .icon { margin: 0; cursor: pointer; }
 
 /* Toast */
 #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 16px; background: #1b2a3a; color: var(--text); padding: 10px 16px; border-radius: 10px; border:1px solid var(--border); box-shadow: var(--shadow); z-index: 5; }
@@ -186,3 +193,15 @@ html, body { margin:0; padding:0; background: var(--bg); color: var(--text); fon
 /* Target value + unit layout and unit size */
 .target-wrap { display:flex; align-items:baseline; gap:8px; }
 .unit-lg { font-size: calc(var(--target-size) - 2px); color: var(--muted); }
+
+/* Modal */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; z-index: 6; }
+/* Ensure hidden attribute really hides the modal even though .modal sets display */
+.modal[hidden] { display: none !important; }
+.modal-card { width: min(520px, 92vw); background: var(--panel); border:1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+.modal-title { padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 700; }
+.modal-body { display:flex; flex-direction: column; gap:8px; padding: 12px 14px; }
+.modal-body input[type="file"],
+.modal-body input[type="text"] { background: var(--chip); color: var(--text); border:1px solid var(--border); border-radius: 10px; padding:8px; }
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; padding: 12px 14px; border-top: 1px solid var(--border); }
+.hint { color: var(--muted); font-size: 12px; }

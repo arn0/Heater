@@ -6,6 +6,8 @@ const MIN_WINDOW_MS = 10 * 60 * 1000;         // 10 minutes
 const MAX_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;// 30 days
 
 let db;
+let dbReady = false;
+const pendingSnapshots = [];
 let websocket;
 let canvas, ctx;
 let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
@@ -118,12 +120,13 @@ const DB_STORE_NAME = 'snapshots';
 
 function openDb() {
   const req = indexedDB.open(DB_NAME, DB_VERSION);
-  req.onsuccess = function () { db = this.result; };
+  req.onsuccess = function () { db = this.result; dbReady = true; if (pendingSnapshots.length) { try { const store = getObjectStore(DB_STORE_NAME, 'readwrite'); for (const o of pendingSnapshots.splice(0)) { try { store.put(o); } catch (_) {} } } catch (_) {} scheduleDraw(); } };
   req.onupgradeneeded = function (evt) { evt.currentTarget.result.createObjectStore(DB_STORE_NAME, { keyPath: 'time' }); };
 }
 function getObjectStore(name, mode) { return db.transaction(name, mode).objectStore(name); }
 function addSnapshot(obj) {
-  try { getObjectStore(DB_STORE_NAME, 'readwrite').put(obj); } catch (e) { /* no-op */ }
+  if (!dbReady || !db) { pendingSnapshots.push(obj); return; }
+  try { getObjectStore(DB_STORE_NAME, 'readwrite').put(obj); } catch (e) { /* ignore */ }
 }
 
 // WebSocket
@@ -278,52 +281,39 @@ function drawStages(points, padL, padT, chartW, chartH) {
   const span = Math.max(1, viewEndMs - viewStartMs);
   const toX = (t) => padL + (t - viewStartMs) / span * chartW;
 
-  // Build/merge runs for a predicate, close tiny gaps (3px or <=60s)
-  const runsFrom = (predicate) => {
-    const list = [];
-    let cur = predicate(points[0]);
-    let start = points[0].time;
-    for (let i = 1; i < points.length; i++) {
-      const v = predicate(points[i]);
-      if (v !== cur) { list.push({ v: cur, a: start, b: points[i].time }); cur = v; start = points[i].time; }
-    }
-    list.push({ v: cur, a: start, b: points[points.length - 1].time });
-    // merge adjacent equals
-    for (let i = 1; i < list.length; ) {
-      if (list[i].v === list[i-1].v) { list[i-1].b = list[i].b; list.splice(i,1); } else i++;
-    }
-    // close short zero gaps between non-zero runs
-    for (let i = 1; i < list.length - 1; ) {
-      const mid = list[i];
-      if (!mid.v && list[i-1].v && list[i+1].v) {
-        const gapPx = Math.ceil(toX(mid.b)) - Math.floor(toX(mid.a));
-        const gapSec = (mid.b - mid.a) / 1000;
-        if (gapPx <= 3 || gapSec <= 60) { list[i-1].b = list[i+1].b; list.splice(i,2); continue; }
-      }
-      i++;
-    }
-    return list;
-  };
-
-  const runs1 = runsFrom(p => (p.one_pwr && !p.two_pwr) ? 1 : 0);
-  const runs2 = runsFrom(p => (p.two_pwr && !p.one_pwr) ? 1 : 0);
-  const runsBoth = runsFrom(p => (p.one_pwr && p.two_pwr) ? 1 : 0);
-
-  const drawRuns = (runs, colorVar) => {
-    ctx.save();
-    ctx.fillStyle = getCss(colorVar);
-    for (const r of runs) {
-      if (!r.v) continue;
-      const x1 = Math.floor(toX(r.a));
-      const x2 = Math.ceil(toX(r.b));
-      const width = Math.max(1, x2 - x1);
-      ctx.fillRect(x1, padT, width, chartH);
-    }
-    ctx.restore();
-  };
-  drawRuns(runs1, '--stage1');
-  drawRuns(runs2, '--stage2');
-  drawRuns(runsBoth, '--stageBoth');
+  // 4 states: 0 none, 1 stage1, 2 stage2, 3 both
+  const runs = [];
+  const stateOf = (p) => (p.one_pwr && p.two_pwr) ? 3 : (p.two_pwr ? 2 : (p.one_pwr ? 1 : 0));
+  let cur = stateOf(points[0]);
+  let start = points[0].time;
+  for (let i = 1; i < points.length; i++) {
+    const s = stateOf(points[i]);
+    if (s !== cur) { runs.push({ s: cur, a: start, b: points[i].time }); cur = s; start = points[i].time; }
+  }
+  runs.push({ s: cur, a: start, b: points[points.length - 1].time });
+  // merge adj equals
+  for (let i = 1; i < runs.length; ) {
+    if (runs[i].s === runs[i-1].s) { runs[i-1].b = runs[i].b; runs.splice(i,1); } else i++;
+  }
+  // draw one color per x with no overlap between runs
+  ctx.save();
+  const bounds = runs.map(r => toX(r.a));
+  bounds.push(toX(runs[runs.length - 1].b));
+  const px = new Array(bounds.length);
+  for (let i = 0; i < bounds.length; i++) {
+    const v = Math.round(bounds[i]);
+    px[i] = (i === 0) ? v : Math.max(v, px[i-1]);
+  }
+  for (let i = 0; i < runs.length; i++) {
+    const r = runs[i];
+    if (r.s === 0) continue;
+    const x1 = px[i];
+    const x2 = Math.max(px[i+1], x1 + 1);
+    const width = x2 - x1;
+    ctx.fillStyle = (r.s === 3) ? getCss('--stageBoth') : (r.s === 2 ? getCss('--stage2') : getCss('--stage1'));
+    ctx.fillRect(x1, padT, width, chartH);
+  }
+  ctx.restore();
 }
 
 function drawLine(series, padL, padT, chartW, chartH, yMin, yMax, color) {

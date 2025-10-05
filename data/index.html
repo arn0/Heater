@@ -63,7 +63,7 @@
       </div>
 
       <div class="section">
-        <div class="section-title">Laatste 60 min</div>
+        <div class="section-title">Laatste uur</div>
         <div class="spark-wrap"><canvas id="spark_rem" width="600" height="120" aria-label="Temperatuur sparkline"></canvas></div>
       </div>
     </section>
@@ -133,6 +133,7 @@
     <a href="tools.html"><div id="tool" class="icon icon-tools" title="Tools"></div></a>
     <a href="graph.html"><div id="graph" class="icon icon-graph" title="Klassieke grafiek"></div></a>
     <a href="chart-n.html" class="link">Nieuwe grafiek</a>
+    <div id="upload_icon" class="icon icon-upload" title="Upload"></div>
     <div class="spacer"></div>
     <div class="meta">
       <div class="kv"><div>Records</div><div id="count">-</div></div>
@@ -141,6 +142,25 @@
   </div>
 
   <div id="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- Simple upload modal -->
+  <div id="upload_modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="upload_title">
+      <div class="modal-title" id="upload_title">Bestand uploaden</div>
+      <div class="modal-body">
+        <label for="upload_file">Bestand(en)</label>
+        <input id="upload_file" type="file" multiple>
+        <label for="upload_path" style="margin-top:8px">Pad op server</label>
+        <input id="upload_path" type="text" placeholder="bestandsnaam.ext of map/">
+        <div class="hint">- Max 200 KB per bestand
+          - Voor meerdere bestanden: geef optioneel een map met afsluitende "/" (bijv. data/)</div>
+      </div>
+      <div class="modal-actions">
+        <button id="upload_send" class="btn" type="button">Upload</button>
+        <button id="upload_close" class="btn btn-secondary" type="button">Annuleren</button>
+      </div>
+    </div>
+  </div>
 
 </body>
 </html>

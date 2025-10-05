@@ -131,7 +131,12 @@ function initButtons() {
 	document.getElementById('night_check').addEventListener('change', day_night);
 	overrideClear.addEventListener('click', clearOverride);
     // Quick actions removed from UI
-	if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+    if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+    const upOpen = document.getElementById('upload_open') || document.getElementById('upload_icon');
+    if (upOpen) upOpen.addEventListener('click', openUploadModal);
+    const upClose = document.getElementById('upload_close'); if (upClose) upClose.addEventListener('click', closeUploadModal);
+    const upFile = document.getElementById('upload_file'); if (upFile) upFile.addEventListener('change', setUploadPath);
+    const upSend = document.getElementById('upload_send'); if (upSend) upSend.addEventListener('click', uploadFileToServer);
 }
 
 function decrement() {
@@ -194,15 +199,29 @@ const DB_VERSION = 1;
 const DB_STORE_NAME = 'snapshots';
 
 var db;
+let dbReady = false;
+const pendingSnapshots = [];
 
 function openDb() {
 	console.log("openDb ...");
 	var request = indexedDB.open(DB_NAME, DB_VERSION);
 
 	request.onsuccess = function (evt) {
-		// Equal to: db = request.result;
-		db = this.result;
-		console.log("openDb DONE");
+    // Equal to: db = request.result;
+    db = this.result;
+    dbReady = true;
+    console.log("openDb DONE");
+    // Flush any snapshots received before DB was ready
+    if (pendingSnapshots.length) {
+      try {
+        const store = getObjectStore(DB_STORE_NAME, 'readwrite');
+        for (const obj of pendingSnapshots.splice(0)) {
+          try { store.put(obj); } catch (_) { /* ignore single put failure */ }
+        }
+      } catch (e) { /* ignore */ }
+      // Kick UI counters and sparkline once after flush
+      try { countRecords(); drawSpark(); } catch (_) { /* no-op */ }
+    }
 	};
 
 	request.onerror = function (evt) {
@@ -216,27 +235,25 @@ function openDb() {
 }
 
 function getObjectStore(store_name, mode) {
-	var tx = db.transaction(store_name, mode);
-	return tx.objectStore(store_name);
+    var tx = db.transaction(store_name, mode);
+    return tx.objectStore(store_name);
 }
 
 function addSnapshot(obj) {
-	//	console.log("addSnapshot arguments:", arguments);
+    // If DB not ready yet, queue the snapshot and return
+    if (!dbReady || !db) { pendingSnapshots.push(obj); return; }
 
-	var store = getObjectStore(DB_STORE_NAME, 'readwrite');
-	var req;
+    var store = getObjectStore(DB_STORE_NAME, 'readwrite');
+    var req;
 
-	try {
-		req = store.put(obj);
-	} catch (e) {
-		throw e;
-	}
-	req.onsuccess = function (evt) {
-		//		console.log("Insertion in DB successful");
-	};
-	req.onerror = function () {
-		console.error("addSnapshot error", this.error);
-	};
+    try {
+        req = store.put(obj);
+    } catch (e) {
+        console.error("addSnapshot put() threw", e);
+        return;
+    }
+    req.onsuccess = function (evt) { /* inserted */ };
+    req.onerror = function () { console.error("addSnapshot error", this.error); };
 }
 
 const count = document.getElementById("count");
@@ -731,25 +748,37 @@ function drawSpark() {
         return list;
       };
 
-      // 4-state shading: 0% (none), 40% (stage1-only), 60% (stage2-only), 100% (both)
-      const runs1 = runsFrom(p => (p.one && !p.two) ? 1 : 0);
-      const runs2 = runsFrom(p => (p.two && !p.one) ? 1 : 0);
-      const runsBoth = runsFrom(p => (p.one && p.two) ? 1 : 0);
-
-      const drawRuns = (runs, colorVar) => {
-        for (const r of runs) {
-          if (!r.v) continue;
-          const x1 = Math.floor(toX(r.a));
-          const x2 = Math.ceil(toX(r.b));
-          const width = Math.max(1, x2 - x1);
-          ctx.fillStyle = getCss(colorVar);
-          ctx.fillRect(x1, 2, width, h - 6);
-        }
-      };
-      // draw in order: 40% base, 60% over it, then 100% darkest on top
-      drawRuns(runs1, '--stage1');
-      drawRuns(runs2, '--stage2');
-      drawRuns(runsBoth, '--stageBoth');
+      // 4-state shading: 0 none, 1 stage1, 2 stage2, 3 both
+      const runs = [];
+      let sCur = (pts[0].one && pts[0].two) ? 3 : (pts[0].two ? 2 : (pts[0].one ? 1 : 0));
+      let sStart = pts[0].t;
+      for (let i = 1; i < pts.length; i++) {
+        const s = (pts[i].one && pts[i].two) ? 3 : (pts[i].two ? 2 : (pts[i].one ? 1 : 0));
+        if (s !== sCur) { runs.push({ s: sCur, a: sStart, b: pts[i].t }); sCur = s; sStart = pts[i].t; }
+      }
+      runs.push({ s: sCur, a: sStart, b: pts[pts.length - 1].t });
+      // merge adjacent equals
+      for (let i = 1; i < runs.length; ) {
+        if (runs[i].s === runs[i-1].s) { runs[i-1].b = runs[i].b; runs.splice(i,1); } else i++;
+      }
+      // Convert run boundaries to pixel columns once to avoid overlap/double-draw
+      const bounds = runs.map(r => toX(r.a));
+      bounds.push(toX(runs[runs.length - 1].b));
+      // Round and enforce monotonic non-decreasing sequence
+      const px = new Array(bounds.length);
+      for (let i = 0; i < bounds.length; i++) {
+        const v = Math.round(bounds[i]);
+        px[i] = (i === 0) ? v : Math.max(v, px[i-1]);
+      }
+      for (let i = 0; i < runs.length; i++) {
+        const r = runs[i];
+        if (r.s === 0) continue;
+        const x1 = px[i];
+        const x2 = Math.max(px[i+1], x1 + 1);
+        const width = x2 - x1;
+        ctx.fillStyle = (r.s === 3) ? getCss('--stageBoth') : (r.s === 2 ? getCss('--stage2') : getCss('--stage1'));
+        ctx.fillRect(x1, 2, width, h - 6);
+      }
       // baseline
       ctx.strokeStyle = '#233040'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(4, h-4); ctx.lineTo(w-4, h-4); ctx.stroke();
       // room
@@ -815,3 +844,79 @@ function showToast(text, error=false) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(()=>{ toast.hidden = true; }, 1600);
 }
+
+// Upload modal helpers
+function openUploadModal(){
+  const m = document.getElementById('upload_modal');
+  if (!m) return;
+  const f = document.getElementById('upload_file');
+  const p = document.getElementById('upload_path');
+  const sendBtn = document.getElementById('upload_send');
+  if (f) { try { f.value = ''; } catch(_) {} f.disabled = false; }
+  if (p) { p.value = ''; p.disabled = false; }
+  if (sendBtn) sendBtn.disabled = false;
+  m.hidden = false;
+}
+function closeUploadModal(){ const m = document.getElementById('upload_modal'); if (m) m.hidden = true; }
+function setUploadPath(){
+  const f = document.getElementById('upload_file'); const p = document.getElementById('upload_path');
+  if (!f || !p) return;
+  if (f.files && f.files.length === 1) { p.value = f.files[0].name; }
+  // Auto-start upload right after file selection
+  setTimeout(uploadFileToServer, 0);
+}
+function uploadFileToServer(){
+  const fileInput = document.getElementById('upload_file');
+  const pathInput = document.getElementById('upload_path');
+  if (!fileInput || !pathInput) return;
+  const files = fileInput.files;
+  const filePath = pathInput.value || (files && files[0] ? files[0].name : '');
+  const MAX_FILE_SIZE = 200*1024;
+  if (!files || files.length === 0) { showToast('Geen bestand geselecteerd', true); return; }
+  // Validation for prefix/path and filenames
+  let prefix = (pathInput.value || '').trim();
+  if (prefix.indexOf(' ') >= 0) { showToast('Pad mag geen spaties bevatten', true); return; }
+  // For multiple files, treat provided prefix as folder; append '/' if missing
+  if (files.length > 1 && prefix && !prefix.endsWith('/')) { prefix = prefix + '/'; }
+  // Validate sizes and names
+  for (const f of files) {
+    if (f.size > MAX_FILE_SIZE) { showToast(`Te groot: ${f.name}`, true); return; }
+    if (f.name.indexOf(' ') >= 0) { showToast(`Spatie in naam: ${f.name}`, true); return; }
+  }
+
+  // Disable controls during upload and close modal immediately
+  fileInput.disabled = true; pathInput.disabled = true;
+  const sendBtn = document.getElementById('upload_send'); if (sendBtn) sendBtn.disabled = true;
+  // Close modal at start as requested
+  closeUploadModal();
+  showToast(`Upload gestart${files.length>1?` (${files.length})`:''}`);
+
+  const uploadOne = (i) => {
+    if (i >= files.length) {
+      showToast('Upload klaar');
+      fileInput.disabled = false; pathInput.disabled = false; if (sendBtn) sendBtn.disabled = false;
+      return;
+    }
+    const f = files[i];
+    const serverPath = '/upload/' + (files.length > 1 ? (prefix || '') + f.name : (prefix && prefix.endsWith('/') ? prefix + f.name : (prefix || f.name)));
+    const xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function(){
+      if (xhttp.readyState === 4){
+      if (xhttp.status === 200){ uploadOne(i+1); }
+        else { showToast(`Fout ${xhttp.status} bij ${f.name}`, true); fileInput.disabled=false; pathInput.disabled=false; if (sendBtn) sendBtn.disabled=false; }
+      }
+    };
+    try { xhttp.open('POST', serverPath, true); xhttp.send(f); }
+    catch(e) { showToast('Upload fout', true); fileInput.disabled=false; pathInput.disabled=false; if (sendBtn) sendBtn.disabled=false; }
+  };
+  uploadOne(0);
+}
+
+// Close modal on overlay click or Escape
+const _um = document.getElementById('upload_modal');
+if (_um) {
+  _um.addEventListener('click', (e) => { if (e.target === _um) closeUploadModal(); });
+}
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { const m = document.getElementById('upload_modal'); if (m && !m.hidden) closeUploadModal(); }
+});
