@@ -11,16 +11,16 @@ static const char *CONFIG_PATH = "/data/config.json";
 static const heater_config_t kDefaultConfig = {
     .day_start_minutes = 6 * 60 + 30,
     .night_start_minutes = 22 * 60 + 30,
-    .day_temperature = 20.5f,
-    .night_temperature = 17.5f,
-    .floor_temperature = 17.0f,
+    .day_temperature = 20.0f,
+    .night_temperature = 17.0f,
+    .floor_temperature = 12.0f,
     .night_enabled = true,
     .preheat_min_minutes = 30,
     .preheat_max_minutes = 90,
     .warmup_rate_c_per_min = 0.12f,
-    .stage_full_delta = 0.6f,
+    .stage_full_delta = 0.5f,
     .stage_single_delta = 0.25f,
-    .stage_hold_delta = 0.15f,
+    .stage_hold_delta = 0.05f,
     .override_duration_minutes = 120,
 };
 
