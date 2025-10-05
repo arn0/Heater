@@ -75,10 +75,12 @@
       <div class="section">
         <div class="section-title">Doel</div>
         <div class="target-row">
-          <div class="target-wrap"><div id="input" class="target">--.-</div><span class="unit unit-lg">°C</span></div>
-          <div class="stepper">
+          <div class="stepper stepper-left">
             <button class="btn" id="decrement2" aria-label="-1.0">−</button>
             <button class="btn" id="decrement" aria-label="-0.1">−</button>
+          </div>
+          <div class="target-wrap"><div id="input" class="target">--.-</div><span class="unit unit-lg">°C</span></div>
+          <div class="stepper stepper-right">
             <button class="btn" id="increment" aria-label="+0.1">+</button>
             <button class="btn" id="increment2" aria-label="+1.0">+</button>
           </div>
@@ -113,20 +115,14 @@
         <div class="section-title">Override</div>
         <div class="override-row">
           <div id="override_state" class="chip" aria-live="polite">Uit</div>
-          <button id="override_clear" class="btn btn-secondary">Reset</button>
-        </div>
-        <div class="quick-actions">
-          <button class="btn btn-ghost" id="qa_boost30" title="Boost 30 min">Boost 30m</button>
-          <button class="btn btn-ghost" id="qa_boost60" title="Boost 60 min">Boost 60m</button>
-          <button class="btn btn-ghost" id="qa_eco" title="Eco −1.0°C">Eco −1.0°C</button>
-          <button class="btn btn-ghost" id="qa_resume" title="Hervat schema">Hervat schema</button>
+          <button id="override_clear" class="btn btn-secondary">Hervat schema</button>
         </div>
       </div>
 
       <div class="section">
         <div class="section-title">Status</div>
         <div class="schedule-row">
-          <div class="kv"><div>Laatste update</div><div id="time" class="value chip" aria-live="polite">--:--:--</div></div>
+          <div class="kv"><div>Laatste update</div><div id="time" aria-live="polite">--:--:--</div></div>
         </div>
         <div id="status_line" class="status-line" aria-live="polite">Verbonden</div>
       </div>

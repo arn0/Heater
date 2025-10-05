@@ -130,10 +130,7 @@ function initButtons() {
 	document.getElementById('night_target').addEventListener('change', day_night);
 	document.getElementById('night_check').addEventListener('change', day_night);
 	overrideClear.addEventListener('click', clearOverride);
-	const qaB30 = document.getElementById('qa_boost30'); if (qaB30) qaB30.addEventListener('click', () => quickBoost(30));
-	const qaB60 = document.getElementById('qa_boost60'); if (qaB60) qaB60.addEventListener('click', () => quickBoost(60));
-	const qaEco = document.getElementById('qa_eco'); if (qaEco) qaEco.addEventListener('click', () => { websocket.send('D'); showToast('Eco −0,1°'); });
-	const qaRes = document.getElementById('qa_resume'); if (qaRes) qaRes.addEventListener('click', clearOverride);
+    // Quick actions removed from UI
 	if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
 }
 
@@ -694,7 +691,7 @@ function drawSpark() {
   const pts = [];
   req.onsuccess = (e) => {
     const c = e.target.result;
-    if (c) { pts.push({ t: c.value.time * 1000, rem: c.value.rem, tgt: c.value.target }); c.continue(); }
+    if (c) { pts.push({ t: c.value.time * 1000, rem: c.value.rem, tgt: c.value.target, one: c.value.one_pwr, two: c.value.two_pwr }); c.continue(); }
     else {
       if (pts.length < 2) return;
       pts.sort((a,b)=>a.t-b.t);
@@ -703,10 +700,60 @@ function drawSpark() {
       let vMin = Infinity, vMax = -Infinity;
       for (const p of pts) { vMin = Math.min(vMin, p.rem, p.tgt); vMax = Math.max(vMax, p.rem, p.tgt); }
       if (!(isFinite(vMin)&&isFinite(vMax)) || vMin===vMax) { vMin=18; vMax=22; }
+      // Stage fills: draw a continuous 'active' band (1 OR 2), then overlay stage 2.
+      const span = Math.max(1, t1 - t0);
+      const toX = (t) => 4 + (t - t0) / span * (w - 8);
+      const runsFrom = (predicate) => {
+        const list = [];
+        let cur = predicate(pts[0]);
+        let start = pts[0].t;
+        for (let i = 1; i < pts.length; i++) {
+          const v = predicate(pts[i]);
+          if (v !== cur) { list.push({ v: cur, a: start, b: pts[i].t }); cur = v; start = pts[i].t; }
+        }
+        list.push({ v: cur, a: start, b: pts[pts.length - 1].t });
+        // merge adjacent equals
+        for (let i = 1; i < list.length; ) {
+          if (list[i].v === list[i-1].v) { list[i-1].b = list[i].b; list.splice(i,1); } else i++;
+        }
+        // close short zero gaps
+        for (let i = 1; i < list.length - 1; ) {
+          const mid = list[i];
+          if (!mid.v && list[i-1].v && list[i+1].v) {
+            const gapPx = Math.ceil(toX(mid.b)) - Math.floor(toX(mid.a));
+            const gapSec = (mid.b - mid.a) / 1000;
+            if (gapPx <= 3 || gapSec <= 60) { // tolerate tiny gaps or <60s order toggles
+              list[i-1].b = list[i+1].b; list.splice(i,2); continue;
+            }
+          }
+          i++;
+        }
+        return list;
+      };
+
+      // 4-state shading: 0% (none), 40% (stage1-only), 60% (stage2-only), 100% (both)
+      const runs1 = runsFrom(p => (p.one && !p.two) ? 1 : 0);
+      const runs2 = runsFrom(p => (p.two && !p.one) ? 1 : 0);
+      const runsBoth = runsFrom(p => (p.one && p.two) ? 1 : 0);
+
+      const drawRuns = (runs, colorVar) => {
+        for (const r of runs) {
+          if (!r.v) continue;
+          const x1 = Math.floor(toX(r.a));
+          const x2 = Math.ceil(toX(r.b));
+          const width = Math.max(1, x2 - x1);
+          ctx.fillStyle = getCss(colorVar);
+          ctx.fillRect(x1, 2, width, h - 6);
+        }
+      };
+      // draw in order: 40% base, 60% over it, then 100% darkest on top
+      drawRuns(runs1, '--stage1');
+      drawRuns(runs2, '--stage2');
+      drawRuns(runsBoth, '--stageBoth');
       // baseline
       ctx.strokeStyle = '#233040'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(4, h-4); ctx.lineTo(w-4, h-4); ctx.stroke();
       // room
-      ctx.strokeStyle = '#ff7b7b'; ctx.lineWidth = 2; ctx.beginPath();
+      ctx.strokeStyle = '#ff7b7b'; ctx.lineWidth = 1; ctx.beginPath();
       pts.forEach((p,i)=>{
         const x = (p.t - t0) / Math.max(1, t1 - t0) * (w-8) + 4;
         const y = h - ((p.rem - vMin) / Math.max(0.001,(vMax - vMin))) * (h-8) - 4;
@@ -714,7 +761,7 @@ function drawSpark() {
       });
       ctx.stroke();
       // target
-      ctx.strokeStyle = '#d0a0ff'; ctx.lineWidth = 2; ctx.beginPath();
+      ctx.strokeStyle = '#d0a0ff'; ctx.lineWidth = 1; ctx.beginPath();
       pts.forEach((p,i)=>{
         const x = (p.t - t0) / Math.max(1, t1 - t0) * (w-8) + 4;
         const y = h - ((p.tgt - vMin) / Math.max(0.001,(vMax - vMin))) * (h-8) - 4;
@@ -724,6 +771,9 @@ function drawSpark() {
     }
   };
 }
+
+// Read CSS variable from :root
+function getCss(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
 // Quick boost shortcuts – requires firmware support for duration; here we just nudge target to ensure hold
 function quickBoost(mins) {

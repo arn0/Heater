@@ -274,22 +274,56 @@ function drawGridAndAxes(padL, padT, chartW, chartH, yMin, yMax) {
 }
 
 function drawStages(points, padL, padT, chartW, chartH) {
-  const w = canvas.width;
-  const span = viewEndMs - viewStartMs;
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i], b = points[i + 1];
-    if (!a) continue;
-    const x1 = padL + (a.time - viewStartMs) / span * chartW;
-    const x2 = padL + (b.time - viewStartMs) / span * chartW;
-    const width = Math.max(1, x2 - x1);
-    if (a.two_pwr) {
-      ctx.fillStyle = getCss('--stage2');
-      ctx.fillRect(x1, padT, width, chartH);
-    } else if (a.one_pwr) {
-      ctx.fillStyle = getCss('--stage1');
+  if (points.length < 2) return;
+  const span = Math.max(1, viewEndMs - viewStartMs);
+  const toX = (t) => padL + (t - viewStartMs) / span * chartW;
+
+  // Build/merge runs for a predicate, close tiny gaps (3px or <=60s)
+  const runsFrom = (predicate) => {
+    const list = [];
+    let cur = predicate(points[0]);
+    let start = points[0].time;
+    for (let i = 1; i < points.length; i++) {
+      const v = predicate(points[i]);
+      if (v !== cur) { list.push({ v: cur, a: start, b: points[i].time }); cur = v; start = points[i].time; }
+    }
+    list.push({ v: cur, a: start, b: points[points.length - 1].time });
+    // merge adjacent equals
+    for (let i = 1; i < list.length; ) {
+      if (list[i].v === list[i-1].v) { list[i-1].b = list[i].b; list.splice(i,1); } else i++;
+    }
+    // close short zero gaps between non-zero runs
+    for (let i = 1; i < list.length - 1; ) {
+      const mid = list[i];
+      if (!mid.v && list[i-1].v && list[i+1].v) {
+        const gapPx = Math.ceil(toX(mid.b)) - Math.floor(toX(mid.a));
+        const gapSec = (mid.b - mid.a) / 1000;
+        if (gapPx <= 3 || gapSec <= 60) { list[i-1].b = list[i+1].b; list.splice(i,2); continue; }
+      }
+      i++;
+    }
+    return list;
+  };
+
+  const runs1 = runsFrom(p => (p.one_pwr && !p.two_pwr) ? 1 : 0);
+  const runs2 = runsFrom(p => (p.two_pwr && !p.one_pwr) ? 1 : 0);
+  const runsBoth = runsFrom(p => (p.one_pwr && p.two_pwr) ? 1 : 0);
+
+  const drawRuns = (runs, colorVar) => {
+    ctx.save();
+    ctx.fillStyle = getCss(colorVar);
+    for (const r of runs) {
+      if (!r.v) continue;
+      const x1 = Math.floor(toX(r.a));
+      const x2 = Math.ceil(toX(r.b));
+      const width = Math.max(1, x2 - x1);
       ctx.fillRect(x1, padT, width, chartH);
     }
-  }
+    ctx.restore();
+  };
+  drawRuns(runs1, '--stage1');
+  drawRuns(runs2, '--stage2');
+  drawRuns(runsBoth, '--stageBoth');
 }
 
 function drawLine(series, padL, padT, chartW, chartH, yMin, yMax, color) {
