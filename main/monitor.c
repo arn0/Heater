@@ -145,9 +145,9 @@ void monitor_task() {
 			}
 #endif
 			if ( now > next_heap_time ) {
-				next_heap_time = now + 60 * 60;
-				heap_caps_print_heap_info( MALLOC_CAP_DEFAULT ); // Log heap memory every 60 minutes
-				gpio_dump_io_configuration( stdout, 1ULL << SSR_ONE_GPIO_PIN | 1ULL << SSR_TWO_GPIO_PIN | 1ULL << PZEM_RX_GPIO_PIN | 1ULL << PZEM_TX_GPIO_PIN );
+				//next_heap_time = now + 60 * 60;
+				//heap_caps_print_heap_info( MALLOC_CAP_DEFAULT ); // Log heap memory every 60 minutes
+				//gpio_dump_io_configuration( stdout, 1ULL << SSR_ONE_GPIO_PIN | 1ULL << SSR_TWO_GPIO_PIN | 1ULL << PZEM_RX_GPIO_PIN | 1ULL << PZEM_TX_GPIO_PIN );
 			}
 			step = 0;
 			break;
