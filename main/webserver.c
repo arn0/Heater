@@ -457,6 +457,8 @@ static esp_err_t set_content_type_from_file( httpd_req_t *req, const char *filen
 		return httpd_resp_set_type( req, "text/css" );
 	} else if ( IS_FILE_EXT( filename, ".js" ) ) {
 		return httpd_resp_set_type( req, "application/x-javascript" );
+	} else if ( IS_FILE_EXT( filename, ".json" ) ) {
+		return httpd_resp_set_type( req, "application/json" );
 	} else if ( IS_FILE_EXT( filename, ".jpeg" ) ) {
 		return httpd_resp_set_type( req, "image/jpeg" );
 	} else if ( IS_FILE_EXT( filename, ".svg" ) ) {
@@ -646,8 +648,8 @@ static esp_err_t download_get_handler( httpd_req_t *req ) {
 		return ESP_FAIL;
 	}
 
-    ESP_LOGI( TAG, "Sending file : %s (%ld bytes)...", filename, file_stat.st_size );
-    set_content_type_from_file( req, filename );
+   ESP_LOGI( TAG, "Sending file : %s (%ld bytes)...", filename, file_stat.st_size );
+ 	set_content_type_from_file( req, filename );
 
 	/* Retrieve the pointer to scratch buffer for temporary storage */
 	char *chunk = ( (struct file_server_data *)req->user_ctx )->scratch;
