@@ -23,6 +23,7 @@
       <div id="blue" class="icon icon-bluetooth" aria-label="Bluetooth status" role="img"></div>
     </div>
     <div class="status">
+      <div id="worker_badge" class="chip" title="SharedWorker" style="display:none;">SW</div>
       <button id="themeToggle" class="chip" aria-pressed="false" title="Schakel donker/licht">🌙</button>
     </div>
   </header>
@@ -121,8 +122,10 @@
 
       <div class="section">
         <div class="section-title">Status</div>
-        <div class="schedule-row">
+        <div class="schedule-row status-row">
           <div class="kv"><div>Laatste update</div><div id="time" aria-live="polite">--:--:--</div></div>
+          <div class="kv"><div>Records</div><div id="count">-</div></div>
+          <div class="kv"><div>Oudste</div><div id="old">-</div></div>
         </div>
         <div id="status_line" class="status-line" aria-live="polite">Verbonden</div>
       </div>
@@ -134,11 +137,8 @@
     <a href="graph.html"><div id="graph" class="icon icon-graph" title="Klassieke grafiek"></div></a>
     <a href="chart-n.html" class="link">Nieuwe grafiek</a>
     <div id="upload_icon" class="icon icon-upload" title="Upload"></div>
+    <div id="compact_icon" class="icon icon-compact" title="Compactie"></div>
     <div class="spacer"></div>
-    <div class="meta">
-      <div class="kv"><div>Records</div><div id="count">-</div></div>
-      <div class="kv"><div>Oudste</div><div id="old">-</div></div>
-    </div>
   </div>
 
   <div id="toast" role="status" aria-live="polite" hidden></div>
@@ -158,6 +158,39 @@
       <div class="modal-actions">
         <button id="upload_send" class="btn" type="button">Upload</button>
         <button id="upload_close" class="btn btn-secondary" type="button">Annuleren</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compaction modal -->
+  <div id="compact_modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="compact_title">
+      <div class="modal-title" id="compact_title">Compactie</div>
+      <div class="modal-body">
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap:8px;">
+          <label for="cmp_min_h">1 minuut na (uur)</label>
+          <input id="cmp_min_h" type="number" min="0" step="1" value="1">
+          <label for="cmp_ten_d">10 min na (dagen)</label>
+          <input id="cmp_ten_d" type="number" min="0" step="1" value="2">
+          <label for="cmp_min_half">Half venster 1m (s)</label>
+          <input id="cmp_min_half" type="number" min="1" step="1" value="30">
+          <label for="cmp_ten_half">Half venster 10m (s)</label>
+          <input id="cmp_ten_half" type="number" min="1" step="1" value="300">
+        </div>
+        <div class="hint">Compactie reduceert oude data tot vaste intervallen. De worker voert dit uit; pagina's lezen alleen.</div>
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap:8px; margin-top:8px;">
+          <div>Status</div><div id="cmp_status">Idle</div>
+          <div>Fase</div><div id="cmp_phase">-</div>
+          <div>Voortgang</div><div id="cmp_progress">-</div>
+          <div>Gestart</div><div id="cmp_started">-</div>
+          <div>Klaar</div><div id="cmp_finished">-</div>
+        </div>
+        <div class="hint" id="perf_line">Chart render avg: <span id="perf_chart">-</span> ms</div>
+      </div>
+      <div class="modal-actions">
+        <button id="cmp_start" class="btn" type="button">Start</button>
+        <button id="cmp_stop" class="btn btn-secondary" type="button">Stop</button>
+        <button id="cmp_close" class="btn btn-secondary" type="button">Sluiten</button>
       </div>
     </div>
   </div>

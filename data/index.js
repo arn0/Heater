@@ -46,6 +46,8 @@ const spark = document.getElementById("spark_rem");
 var gateway = `ws://${window.location.hostname}/ws`;
 //var gateway = `ws://heater.local/ws`;
 var websocket;
+let useShared = false;
+let swPort = null;
 var update;
 
 // reconnect backoff (1s -> 2s -> 5s capped)
@@ -60,6 +62,22 @@ let lastSparkTs = 0;
 
 function sleep(ms) {
 	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+
+function initSharedWorker() {
+    try {
+        if ('SharedWorker' in window) {
+            const sw = new SharedWorker('ws-worker.js');
+            swPort = sw.port;
+            swPort.onmessage = onWorkerMessage;
+            swPort.start();
+            swPort.postMessage({ type: 'init', host: window.location.hostname, subscribe: true });
+            useShared = true;
+            return true;
+        }
+    } catch (_) { }
+    return false;
 }
 
 function initWebSocket() {
@@ -97,6 +115,7 @@ var testarray = [];
 var counter = 0;
 
 function onMessage(event) {
+	if (useShared) return; // using worker path
 	update = JSON.parse(event.data);
 	addSnapshot(update);
 	pending = update;
@@ -106,7 +125,7 @@ function onMessage(event) {
 window.addEventListener('load', onLoad);
 
 function onLoad(event) {
-	initWebSocket();
+	if (!initSharedWorker()) { initWebSocket(); }
 	initButtons();
 	ta_nig.disabled = !ti_flg.checked;
 	ti_nig.disabled = !ti_flg.checked;
@@ -116,7 +135,8 @@ function onLoad(event) {
 		countRecords();
 		oldRecord();
 	});
-	sleep(10000).then(() => { reduceData(); drawSpark(); });
+	// Compaction handled by worker; still draw spark after a short delay
+	sleep(10000).then(() => { /* reduceData(); */ drawSpark(); });
 }
 
 function initButtons() {
@@ -137,22 +157,28 @@ function initButtons() {
     const upClose = document.getElementById('upload_close'); if (upClose) upClose.addEventListener('click', closeUploadModal);
     const upFile = document.getElementById('upload_file'); if (upFile) upFile.addEventListener('change', setUploadPath);
     const upSend = document.getElementById('upload_send'); if (upSend) upSend.addEventListener('click', uploadFileToServer);
+
+    // Compaction modal bindings
+    const cmpOpen = document.getElementById('compact_icon'); if (cmpOpen) cmpOpen.addEventListener('click', openCompactModal);
+    const cmpClose = document.getElementById('cmp_close'); if (cmpClose) cmpClose.addEventListener('click', closeCompactModal);
+    const cmpStart = document.getElementById('cmp_start'); if (cmpStart) cmpStart.addEventListener('click', startCompaction);
+    const cmpStop = document.getElementById('cmp_stop'); if (cmpStop) cmpStop.addEventListener('click', stopCompaction);
 }
 
 function decrement() {
-	websocket.send('D');
+	wsSend('D');
 }
 
 function decrement2() {
-	websocket.send('E');
+	wsSend('E');
 }
 
 function increment() {
-	websocket.send('U');
+	wsSend('U');
 }
 
 function increment2() {
-	websocket.send('V');
+	wsSend('V');
 }
 
 function day_night() {
@@ -172,11 +198,11 @@ if (Number.isNaN(payload.day_temp)) {
 if (Number.isNaN(payload.night_temp)) {
 	delete payload.night_temp;
 }
-try { websocket.send(JSON.stringify(payload)); showToast('Opgeslagen'); } catch (_) { showToast('Mislukt', true); }
+try { wsSend(JSON.stringify(payload)); showToast('Opgeslagen'); } catch (_) { showToast('Mislukt', true); }
 };
 
 function clearOverride() {
-	try { websocket.send('R'); showToast('Schema hervat'); } catch (_) { showToast('Mislukt', true); }
+try { wsSend('R'); showToast('Schema hervat'); } catch (_) { showToast('Mislukt', true); }
 }
 
 function formatMinutes(minutes) {
@@ -845,6 +871,58 @@ function showToast(text, error=false) {
   toastTimer = setTimeout(()=>{ toast.hidden = true; }, 1600);
 }
 
+// Worker integration
+function onWorkerMessage(ev){
+  const msg = ev.data || {};
+  if (msg.type === 'ws') {
+    if (msg.state === 'open') { wifi.style.background = '#00c4fa'; if (offlineBanner) offlineBanner.hidden = true; setStatus('Verbonden'); }
+    else { wifi.style.background = '#BEBEBE'; if (offlineBanner) offlineBanner.hidden = false; setStatus('Offline – opnieuw verbinden…'); }
+    return;
+  }
+  if (msg.type === 'ready') {
+    // Initialize indicators based on current worker state
+    if (msg.ws === 'open') { wifi.style.background = '#00c4fa'; if (offlineBanner) offlineBanner.hidden = true; setStatus('Verbonden'); }
+    else if (msg.ws === 'closed') { wifi.style.background = '#BEBEBE'; if (offlineBanner) offlineBanner.hidden = false; setStatus('Offline – opnieuw verbinden…'); }
+    // Pages read IDB themselves; kick off once DB is ready
+    if (msg.dbReady) { try { countRecords(); drawSpark(); } catch (_) {} }
+    return;
+  }
+  if (msg.type === 'clients') {
+    const badge = document.getElementById('worker_badge');
+    if (badge) {
+      badge.style.display = 'inline-block';
+      badge.textContent = `SW ${msg.count||0}`;
+    }
+    return;
+  }
+  if (msg.type === 'dbReady') {
+    try { countRecords(); drawSpark(); } catch (_) {}
+    return;
+  }
+  if (msg.type === 'compactStatus') {
+    updateCompactUI(msg.status, msg.cfg);
+    return;
+  }
+  if (msg.type === 'perfChart') {
+    const out = document.getElementById('perf_chart');
+    if (out && typeof msg.avg === 'number') out.textContent = msg.avg;
+    return;
+  }
+  if (msg.type === 'snapshot') {
+    // Receiving data implies WS is up; ensure indicator shows online
+    wifi.style.background = '#00c4fa'; if (offlineBanner) offlineBanner.hidden = true;
+    pending = msg.data;
+    // Do not write to IDB here — worker is the writer
+    scheduleRender();
+    return;
+  }
+}
+
+function wsSend(text){
+  if (useShared && swPort) { try { swPort.postMessage({ type: 'sendText', text }); } catch (_) {} return; }
+  try { websocket && websocket.send(text); } catch (_) {}
+}
+
 // Upload modal helpers
 function openUploadModal(){
   const m = document.getElementById('upload_modal');
@@ -870,16 +948,19 @@ function uploadFileToServer(){
   const pathInput = document.getElementById('upload_path');
   if (!fileInput || !pathInput) return;
   const files = fileInput.files;
-  const filePath = pathInput.value || (files && files[0] ? files[0].name : '');
+  // Snapshot selection BEFORE disabling/closing modal
+  const list = Array.from(files || []);
+  const multi = list.length > 1;
+  const filePath = pathInput.value || (list[0] ? list[0].name : '');
   const MAX_FILE_SIZE = 200*1024;
-  if (!files || files.length === 0) { showToast('Geen bestand geselecteerd', true); return; }
+  if (!list.length) { showToast('Geen bestand geselecteerd', true); return; }
   // Validation for prefix/path and filenames
   let prefix = (pathInput.value || '').trim();
   if (prefix.indexOf(' ') >= 0) { showToast('Pad mag geen spaties bevatten', true); return; }
   // For multiple files, treat provided prefix as folder; append '/' if missing
-  if (files.length > 1 && prefix && !prefix.endsWith('/')) { prefix = prefix + '/'; }
-  // Validate sizes and names
-  for (const f of files) {
+  if (multi && prefix && !prefix.endsWith('/')) { prefix = prefix + '/'; }
+  // Validate sizes and disallow spaces in filenames (ESP FS)
+  for (const f of list) {
     if (f.size > MAX_FILE_SIZE) { showToast(`Te groot: ${f.name}`, true); return; }
     if (f.name.indexOf(' ') >= 0) { showToast(`Spatie in naam: ${f.name}`, true); return; }
   }
@@ -889,23 +970,35 @@ function uploadFileToServer(){
   const sendBtn = document.getElementById('upload_send'); if (sendBtn) sendBtn.disabled = true;
   // Close modal at start as requested
   closeUploadModal();
-  showToast(`Upload gestart${files.length>1?` (${files.length})`:''}`);
+  showToast(`Upload gestart${list.length>1?` (${list.length})`:''}`);
 
   const uploadOne = (i) => {
-    if (i >= files.length) {
+    if (i >= list.length) {
       showToast('Upload klaar');
       fileInput.disabled = false; pathInput.disabled = false; if (sendBtn) sendBtn.disabled = false;
       return;
     }
-    const f = files[i];
-    const serverPath = '/upload/' + (files.length > 1 ? (prefix || '') + f.name : (prefix && prefix.endsWith('/') ? prefix + f.name : (prefix || f.name)));
+    const f = list[i];
+    // Build relative path then URL-encode per path segment
+    let rel;
+    if (multi) {
+      rel = (prefix || '') + f.name; // prefix ensured to have trailing '/' above
+    } else {
+      rel = (prefix && prefix.endsWith('/')) ? (prefix + f.name) : (prefix || f.name);
+    }
+    const encRel = rel.split('/').map(encodeURIComponent).join('/');
+    const serverPath = '/upload/' + encRel;
     const xhttp = new XMLHttpRequest();
+    xhttp.timeout = 20000; // 20s safety
     xhttp.onreadystatechange = function(){
       if (xhttp.readyState === 4){
-      if (xhttp.status === 200){ uploadOne(i+1); }
+        const ok = (xhttp.status === 200 || xhttp.status === 0);
+        if (ok) { uploadOne(i+1); }
         else { showToast(`Fout ${xhttp.status} bij ${f.name}`, true); fileInput.disabled=false; pathInput.disabled=false; if (sendBtn) sendBtn.disabled=false; }
       }
     };
+    xhttp.onerror = function(){ showToast(`Netwerkfout bij ${f.name}`, true); fileInput.disabled=false; pathInput.disabled=false; if (sendBtn) sendBtn.disabled=false; };
+    xhttp.ontimeout = function(){ uploadOne(i+1); };
     try { xhttp.open('POST', serverPath, true); xhttp.send(f); }
     catch(e) { showToast('Upload fout', true); fileInput.disabled=false; pathInput.disabled=false; if (sendBtn) sendBtn.disabled=false; }
   };
@@ -920,3 +1013,42 @@ if (_um) {
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { const m = document.getElementById('upload_modal'); if (m && !m.hidden) closeUploadModal(); }
 });
+
+// Compaction modal helpers
+function openCompactModal(){
+  const m = document.getElementById('compact_modal'); if (!m) return;
+  // ask worker for current status/config
+  if (swPort) try { swPort.postMessage({ type:'compactGet' }); } catch(_) {}
+  m.hidden = false;
+}
+function closeCompactModal(){ const m = document.getElementById('compact_modal'); if (m) m.hidden = true; }
+function startCompaction(){
+  const h = parseInt(document.getElementById('cmp_min_h').value,10)||1;
+  const d = parseInt(document.getElementById('cmp_ten_d').value,10)||2;
+  const mh = parseInt(document.getElementById('cmp_min_half').value,10)||30;
+  const th = parseInt(document.getElementById('cmp_ten_half').value,10)||300;
+  if (swPort) try { swPort.postMessage({ type:'compactStart', cfg:{ minutelyAfterSecs: h*3600, tenMinAfterSecs: d*86400, minuteHalfWindow: mh, tenHalfWindow: th } }); } catch(_) {}
+}
+function stopCompaction(){ if (swPort) try { swPort.postMessage({ type:'compactStop' }); } catch(_) {} }
+function updateCompactUI(status, cfg){
+  if (cfg){
+    const a = document.getElementById('cmp_min_h'); if (a && !document.activeElement.matches('#cmp_min_h')) a.value = Math.round(cfg.minutelyAfterSecs/3600);
+    const b = document.getElementById('cmp_ten_d'); if (b && !document.activeElement.matches('#cmp_ten_d')) b.value = Math.round(cfg.tenMinAfterSecs/86400);
+    const c = document.getElementById('cmp_min_half'); if (c && !document.activeElement.matches('#cmp_min_half')) c.value = cfg.minuteHalfWindow;
+    const d = document.getElementById('cmp_ten_half'); if (d && !document.activeElement.matches('#cmp_ten_half')) d.value = cfg.tenHalfWindow;
+  }
+  if (!status) return;
+  const st = document.getElementById('cmp_status'); if (st) st.textContent = status.running ? 'Bezig' : 'Idle';
+  const ph = document.getElementById('cmp_phase'); if (ph) ph.textContent = status.phase || '-';
+  const pr = document.getElementById('cmp_progress'); if (pr) pr.textContent = status.progressKey ? new Date(status.progressKey*1000).toLocaleString() : '-';
+  const ss = document.getElementById('cmp_started'); if (ss) ss.textContent = status.startedAt ? new Date(status.startedAt).toLocaleString() : '-';
+  const ff = document.getElementById('cmp_finished'); if (ff) ff.textContent = status.finishedAt ? new Date(status.finishedAt).toLocaleString() : '-';
+}
+
+// Close compaction modal on overlay click or Escape
+const _cm = document.getElementById('compact_modal');
+if (_cm) { _cm.addEventListener('click', (e)=>{ if (e.target === _cm) closeCompactModal(); }); }
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const m = document.getElementById('compact_modal'); if (m && !m.hidden) closeCompactModal(); } });
+
+// Inform worker on page unload to keep client count accurate
+window.addEventListener('unload', () => { if (swPort) { try { swPort.postMessage({ type:'bye' }); } catch(_) {} } });

@@ -9,6 +9,7 @@ let db;
 let dbReady = false;
 const pendingSnapshots = [];
 let websocket;
+let swPort = null;
 let canvas, ctx;
 let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
 let plot = []; // {time(ms), rem, target, power, one_pwr, two_pwr}
@@ -35,7 +36,7 @@ function onLoad() {
   setupResize();
   bindUI();
   openDb();
-  initWebSocket();
+  if (!initSharedWorker()) { initWebSocket(); }
   refreshData();
 }
 
@@ -193,6 +194,7 @@ let drawScheduled = false;
 function scheduleDraw() { if (!drawScheduled) { drawScheduled = true; requestAnimationFrame(draw); } }
 
 function draw() {
+  const t0 = performance.now();
   drawScheduled = false;
   const w = canvas.width, h = canvas.height;
   ctx.clearRect(0, 0, w, h);
@@ -231,6 +233,15 @@ function draw() {
 
   function drawAxesOnly() {
     drawGridAndAxes(padL, padT, chartW, chartH, 18, 22);
+  }
+
+  // Report draw performance (throttled)
+  if (swPort) {
+    const dt = performance.now() - t0;
+    if (!draw._lastPerf || (performance.now() - draw._lastPerf) > 500) {
+      draw._lastPerf = performance.now();
+      try { swPort.postMessage({ type: 'perfChart', drawMs: dt }); } catch (_) {}
+    }
   }
 }
 
@@ -396,3 +407,24 @@ function xToTime(x, start, end, width) {
 function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
 function getCss(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function formatTime(d) { return d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }); }
+function initSharedWorker(){
+  try {
+    if ('SharedWorker' in window) {
+      const sw = new SharedWorker('ws-worker.js');
+      swPort = sw.port;
+      swPort.onmessage = onWorkerMessage;
+      swPort.start();
+      // No live snapshots needed for chart-n; just ensure the worker is up
+      swPort.postMessage({ type: 'init', host: window.location.hostname, subscribe: false });
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+function onWorkerMessage(ev){
+  const msg = ev.data || {};
+  if (msg.type === 'dbReady' || (msg.type === 'ready' && msg.dbReady)) {
+    refreshData();
+  }
+}

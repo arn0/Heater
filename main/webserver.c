@@ -605,10 +605,9 @@ static esp_err_t upload_post_handler( httpd_req_t *req ) {
 	fclose( fd );
 	ESP_LOGI( TAG, "File reception complete" );
 
-	/* Redirect onto root to see the updated file list */
-	//    httpd_resp_set_status(req, "303 See Other");
-	//    httpd_resp_set_hdr(req, "Location", "/");
-	//    httpd_resp_sendstr(req, "File uploaded successfully");
+	/* Explicitly send 200 OK so clients (Safari) see a success status */
+	httpd_resp_set_type( req, "text/plain" );
+	httpd_resp_sendstr( req, "OK" );
 	return ESP_OK;
 }
 
