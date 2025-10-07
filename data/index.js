@@ -42,6 +42,18 @@ const offlineBanner = document.getElementById("offline_banner");
 const toast = document.getElementById("toast");
 const themeToggle = document.getElementById("themeToggle");
 const spark = document.getElementById("spark_rem");
+const compStageInputs = [
+  { age: 'cmp_s1_age', interval: 'cmp_s1_interval' },
+  { age: 'cmp_s2_age', interval: 'cmp_s2_interval' },
+  { age: 'cmp_s3_age', interval: 'cmp_s3_interval' }
+];
+let lastCompactCfg = {
+  stages: [
+    { olderThanSecs: 3600, targetIntervalSecs: 60 },
+    { olderThanSecs: 48 * 3600, targetIntervalSecs: 600 },
+    { olderThanSecs: 120 * 3600, targetIntervalSecs: 3600 }
+  ]
+};
 
 var gateway = `ws://${window.location.hostname}/ws`;
 //var gateway = `ws://heater.local/ws`;
@@ -947,11 +959,9 @@ function uploadFileToServer(){
   const fileInput = document.getElementById('upload_file');
   const pathInput = document.getElementById('upload_path');
   if (!fileInput || !pathInput) return;
-  const files = fileInput.files;
   // Snapshot selection BEFORE disabling/closing modal
-  const list = Array.from(files || []);
+  const list = Array.from((fileInput.files) || []);
   const multi = list.length > 1;
-  const filePath = pathInput.value || (list[0] ? list[0].name : '');
   const MAX_FILE_SIZE = 200*1024;
   if (!list.length) { showToast('Geen bestand geselecteerd', true); return; }
   // Validation for prefix/path and filenames
@@ -1017,32 +1027,74 @@ window.addEventListener('keydown', (e) => {
 // Compaction modal helpers
 function openCompactModal(){
   const m = document.getElementById('compact_modal'); if (!m) return;
-  // ask worker for current status/config
+  if (lastCompactCfg) populateCompactInputs(lastCompactCfg);
   if (swPort) try { swPort.postMessage({ type:'compactGet' }); } catch(_) {}
   m.hidden = false;
 }
 function closeCompactModal(){ const m = document.getElementById('compact_modal'); if (m) m.hidden = true; }
-function startCompaction(){
-  const h = parseInt(document.getElementById('cmp_min_h').value,10)||1;
-  const d = parseInt(document.getElementById('cmp_ten_d').value,10)||2;
-  const mh = parseInt(document.getElementById('cmp_min_half').value,10)||30;
-  const th = parseInt(document.getElementById('cmp_ten_half').value,10)||300;
-  if (swPort) try { swPort.postMessage({ type:'compactStart', cfg:{ minutelyAfterSecs: h*3600, tenMinAfterSecs: d*86400, minuteHalfWindow: mh, tenHalfWindow: th } }); } catch(_) {}
+
+function populateCompactInputs(cfg){
+  if (!cfg || !Array.isArray(cfg.stages)) return;
+  const stages = cfg.stages.slice().sort((a,b)=>a.olderThanSecs - b.olderThanSecs);
+  compStageInputs.forEach((ids, idx) => {
+    const stage = stages[idx] || {};
+    const ageInput = document.getElementById(ids.age);
+    if (ageInput && document.activeElement !== ageInput) {
+      ageInput.value = stage.olderThanSecs ? Math.round(stage.olderThanSecs / 3600) : '';
+    }
+    const intInput = document.getElementById(ids.interval);
+    if (intInput && document.activeElement !== intInput) {
+      intInput.value = stage.targetIntervalSecs || '';
+    }
+  });
 }
-function stopCompaction(){ if (swPort) try { swPort.postMessage({ type:'compactStop' }); } catch(_) {} }
+
+function startCompaction(){
+  const stages = [];
+  for (const ids of compStageInputs) {
+    const ageInput = document.getElementById(ids.age);
+    const intInput = document.getElementById(ids.interval);
+    const ageHours = ageInput ? parseFloat(ageInput.value) : NaN;
+    const interval = intInput ? parseInt(intInput.value, 10) : NaN;
+    if (!isFinite(ageHours) || ageHours <= 0 || !isFinite(interval) || interval <= 0) {
+      showToast('Ongeldige compactie instellingen', true);
+      return;
+    }
+    stages.push({
+      olderThanSecs: Math.round(ageHours * 3600),
+      targetIntervalSecs: interval
+    });
+  }
+  const ages = stages.map(st => st.olderThanSecs);
+  if (!(ages[0] < ages[1] && ages[1] < ages[2])) {
+    showToast('Stages moeten oplopend zijn (ouder dan)', true);
+    return;
+  }
+  const sortedStages = stages.slice().sort((a,b)=>a.olderThanSecs - b.olderThanSecs);
+  lastCompactCfg = { stages: sortedStages };
+  if (swPort) {
+    try { swPort.postMessage({ type:'compactStart', cfg:{ stages: sortedStages } }); } catch(_) {}
+  }
+  showToast('Compactie gestart');
+}
+function stopCompaction(){ if (swPort) try { swPort.postMessage({ type:'compactStop' }); } catch(_) {}; showToast('Compactie stop aangevraagd'); }
 function updateCompactUI(status, cfg){
-  if (cfg){
-    const a = document.getElementById('cmp_min_h'); if (a && !document.activeElement.matches('#cmp_min_h')) a.value = Math.round(cfg.minutelyAfterSecs/3600);
-    const b = document.getElementById('cmp_ten_d'); if (b && !document.activeElement.matches('#cmp_ten_d')) b.value = Math.round(cfg.tenMinAfterSecs/86400);
-    const c = document.getElementById('cmp_min_half'); if (c && !document.activeElement.matches('#cmp_min_half')) c.value = cfg.minuteHalfWindow;
-    const d = document.getElementById('cmp_ten_half'); if (d && !document.activeElement.matches('#cmp_ten_half')) d.value = cfg.tenHalfWindow;
+  if (cfg && Array.isArray(cfg.stages)) {
+    lastCompactCfg = cfg;
+    populateCompactInputs(cfg);
   }
   if (!status) return;
-  const st = document.getElementById('cmp_status'); if (st) st.textContent = status.running ? 'Bezig' : 'Idle';
-  const ph = document.getElementById('cmp_phase'); if (ph) ph.textContent = status.phase || '-';
-  const pr = document.getElementById('cmp_progress'); if (pr) pr.textContent = status.progressKey ? new Date(status.progressKey*1000).toLocaleString() : '-';
-  const ss = document.getElementById('cmp_started'); if (ss) ss.textContent = status.startedAt ? new Date(status.startedAt).toLocaleString() : '-';
-  const ff = document.getElementById('cmp_finished'); if (ff) ff.textContent = status.finishedAt ? new Date(status.finishedAt).toLocaleString() : '-';
+  const st = document.getElementById('cmp_status');
+  const ph = document.getElementById('cmp_phase');
+  const pr = document.getElementById('cmp_progress');
+  const ss = document.getElementById('cmp_started');
+  const ff = document.getElementById('cmp_finished');
+  const statusText = status.error ? `Fout: ${status.error}` : (status.running ? 'Bezig' : 'Idle');
+  if (st) st.textContent = statusText;
+  if (ph) ph.textContent = status.phase ? status.phase.replace('stage', 'Stage ') : '-';
+  if (pr) pr.textContent = status.progressKey ? new Date(status.progressKey*1000).toLocaleString() : '-';
+  if (ss) ss.textContent = status.startedAt ? new Date(status.startedAt).toLocaleString() : '-';
+  if (ff) ff.textContent = status.finishedAt ? new Date(status.finishedAt).toLocaleString() : '-';
 }
 
 // Close compaction modal on overlay click or Escape
@@ -1051,4 +1103,11 @@ if (_cm) { _cm.addEventListener('click', (e)=>{ if (e.target === _cm) closeCompa
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const m = document.getElementById('compact_modal'); if (m && !m.hidden) closeCompactModal(); } });
 
 // Inform worker on page unload to keep client count accurate
-window.addEventListener('unload', () => { if (swPort) { try { swPort.postMessage({ type:'bye' }); } catch(_) {} } });
+function notifyWorkerBye(){
+  if (swPort) {
+    try { swPort.postMessage({ type:'bye' }); } catch(_) {}
+  }
+}
+window.addEventListener('beforeunload', notifyWorkerBye);
+window.addEventListener('pagehide', notifyWorkerBye);
+window.addEventListener('unload', notifyWorkerBye);

@@ -13,7 +13,7 @@ let swPort = null;
 let canvas, ctx;
 let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
 let plot = []; // {time(ms), rem, target, power, one_pwr, two_pwr}
-let showRoom = true, showTarget = true, showPower = true, showStages = true;
+let showRoom = true, showTarget = true, showStages = true;
 let followLive = true;
 let lastUpdateTs = Date.now();
 
@@ -24,7 +24,6 @@ let viewEndMs = Date.now();
 // UI refs
 const elShowRoom = document.getElementById('showRoom');
 const elShowTarget = document.getElementById('showTarget');
-const elShowPower = document.getElementById('showPower');
 const elShowStages = document.getElementById('showStages');
 const elWindow = document.getElementById('timeWindow');
 
@@ -43,7 +42,6 @@ function onLoad() {
 function bindUI() {
   elShowRoom.addEventListener('change', () => { showRoom = elShowRoom.checked; scheduleDraw(); });
   elShowTarget.addEventListener('change', () => { showTarget = elShowTarget.checked; scheduleDraw(); });
-  elShowPower.addEventListener('change', () => { showPower = elShowPower.checked; scheduleDraw(); });
   elShowStages.addEventListener('change', () => { showStages = elShowStages.checked; scheduleDraw(); });
   elWindow.addEventListener('change', () => {
     const hours = parseInt(elWindow.value, 10) || DEFAULT_HOURS;
@@ -130,7 +128,6 @@ function addSnapshot(obj) {
   try { getObjectStore(DB_STORE_NAME, 'readwrite').put(obj); } catch (e) { /* ignore */ }
 }
 
-// WebSocket
 function initWebSocket() {
   try {
     websocket = new WebSocket(gateway);
@@ -150,6 +147,31 @@ function initWebSocket() {
   } catch (_) { /* ignore */ }
 }
 
+function initSharedWorker(){
+  try {
+    if ('SharedWorker' in window) {
+      const sw = new SharedWorker('ws-worker.js');
+      swPort = sw.port;
+      swPort.onmessage = onWorkerMessage;
+      swPort.start();
+      // No live snapshots needed for chart-n; just ensure the worker is up
+      swPort.postMessage({ type: 'init', host: window.location.hostname, subscribe: false });
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+function onWorkerMessage(ev){
+  const msg = ev.data || {};
+  if (msg.type === 'dbReady' || (msg.type === 'ready' && msg.dbReady)) {
+    refreshData();
+  }
+  if (msg.type === 'compactStatus' && msg.status && msg.status.running === false) {
+    refreshData();
+  }
+}
+
 function refreshData() {
   if (!db) { scheduleDraw(); return; }
   const low = Math.floor(viewStartMs / 1000);
@@ -162,7 +184,6 @@ function refreshData() {
     const cursor = e.target.result;
     if (cursor) {
       const r = cursor.value;
-      // omzet naar ms
       out.push({
         time: r.time * 1000,
         rem: r.rem,
@@ -173,7 +194,6 @@ function refreshData() {
       });
       cursor.continue();
     } else {
-      // sorteren en deduplicatie op tijd
       out.sort((a, b) => a.time - b.time);
       plot = dedupe(out);
       scheduleDraw();
@@ -227,9 +247,6 @@ function draw() {
   const maxPts = Math.max(200, Math.floor(chartW / 2));
   if (showRoom) drawLine(decimate(visible, maxPts, v => v.rem), padL, padT, chartW, chartH, yMin, yMax, '#d22');
   if (showTarget) drawLine(decimate(visible, maxPts, v => v.target), padL, padT, chartW, chartH, yMin, yMax, '#b0b');
-
-  // vermogen in subpaneel onderaan
-  if (showPower) drawPower(visible, padL, padT, chartW, chartH, w, h);
 
   function drawAxesOnly() {
     drawGridAndAxes(padL, padT, chartW, chartH, 18, 22);
@@ -345,38 +362,6 @@ function drawLine(series, padL, padT, chartW, chartH, yMin, yMax, color) {
   ctx.restore();
 }
 
-function drawPower(points, padL, padT, chartW, chartH, w, h) {
-  const bandH = Math.max(32 * dpr, Math.min(64 * dpr, Math.floor(h * 0.18)));
-  const y0 = padT + chartH + 4 * dpr;
-  // achtergrond
-  ctx.save();
-  ctx.fillStyle = '#fafafa';
-  ctx.fillRect(padL, y0, chartW, bandH);
-  // schaal
-  let maxP = 0;
-  for (const p of points) if (typeof p.power === 'number') maxP = Math.max(maxP, p.power);
-  if (maxP <= 0) { ctx.restore(); return; }
-  const span = viewEndMs - viewStartMs;
-  ctx.strokeStyle = getCss('--power');
-  ctx.lineWidth = Math.max(1, 0.9 * dpr);
-  ctx.beginPath();
-  let started = false;
-  const maxPts = Math.max(200, Math.floor(chartW / 2));
-  const series = decimate(points, maxPts, v => v.power);
-  for (const p of series) {
-    const x = padL + (p.x - viewStartMs) / span * chartW;
-    const y = y0 + bandH - (p.y / maxP) * bandH;
-    if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
-  }
-  ctx.stroke();
-  // schaal label rechts
-  ctx.fillStyle = getCss('--muted');
-  ctx.font = `${12 * dpr}px system-ui`;
-  ctx.textAlign = 'right'; ctx.textBaseline = 'top';
-  ctx.fillText(`${Math.round(maxP)} W`, padL + chartW - 4 * dpr, y0 + 2 * dpr);
-  ctx.restore();
-}
-
 function decimate(points, maxPts, accessor) {
   const out = [];
   const n = points.length;
@@ -407,24 +392,8 @@ function xToTime(x, start, end, width) {
 function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
 function getCss(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function formatTime(d) { return d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }); }
-function initSharedWorker(){
-  try {
-    if ('SharedWorker' in window) {
-      const sw = new SharedWorker('ws-worker.js');
-      swPort = sw.port;
-      swPort.onmessage = onWorkerMessage;
-      swPort.start();
-      // No live snapshots needed for chart-n; just ensure the worker is up
-      swPort.postMessage({ type: 'init', host: window.location.hostname, subscribe: false });
-      return true;
-    }
-  } catch (_) {}
-  return false;
-}
 
-function onWorkerMessage(ev){
-  const msg = ev.data || {};
-  if (msg.type === 'dbReady' || (msg.type === 'ready' && msg.dbReady)) {
-    refreshData();
-  }
-}
+function notifyWorkerBye(){ if (swPort) { try { swPort.postMessage({ type:'bye' }); } catch(_) {} } }
+window.addEventListener('beforeunload', notifyWorkerBye);
+window.addEventListener('pagehide', notifyWorkerBye);
+window.addEventListener('unload', notifyWorkerBye);

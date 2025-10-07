@@ -92,8 +92,8 @@ html, body { margin:0; padding:0; background: var(--bg); color: var(--text); fon
 .chip { border:1px solid var(--border); background: var(--chip); padding:6px 10px; border-radius:10px; color:var(--text); }
 
 .schedule-row { display:flex; gap:16px; flex-wrap:wrap; }
-.status-row { gap:8px; }
-.status-row .kv { gap:6px; }
+.status-row { gap:8px; align-items:baseline; }
+.status-row .kv { gap:4px; }
 .status-row .kv > div:nth-child(1) { min-width: auto; }
 .schedule-edit .row { display:flex; align-items:center; gap:10px; margin:6px 0; }
 .schedule-edit .row label { color: var(--muted); min-width: 80px; display:inline-block; }
@@ -208,5 +208,10 @@ html, body { margin:0; padding:0; background: var(--bg); color: var(--text); fon
 .modal-body { display:flex; flex-direction: column; gap:8px; padding: 12px 14px; }
 .modal-body input[type="file"],
 .modal-body input[type="text"] { background: var(--chip); color: var(--text); border:1px solid var(--border); border-radius: 10px; padding:8px; }
+.modal-body input[type="number"] { background: var(--chip); color: var(--text); border:1px solid var(--border); border-radius: 10px; padding:8px; }
 .modal-actions { display:flex; gap:10px; justify-content:flex-end; padding: 12px 14px; border-top: 1px solid var(--border); }
 .hint { color: var(--muted); font-size: 12px; }
+
+.stage-block { display:grid; grid-template-columns: 1fr 1fr; gap:6px 12px; padding:6px 0; border-bottom: 1px solid var(--border); }
+.stage-block:last-child { border-bottom: none; }
+.stage-block .stage-title { grid-column: 1 / span 2; font-weight:600; font-size: 14px; }

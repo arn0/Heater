@@ -167,17 +167,28 @@
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="compact_title">
       <div class="modal-title" id="compact_title">Compactie</div>
       <div class="modal-body">
-        <div class="grid" style="grid-template-columns: 1fr 1fr; gap:8px;">
-          <label for="cmp_min_h">1 minuut na (uur)</label>
-          <input id="cmp_min_h" type="number" min="0" step="1" value="1">
-          <label for="cmp_ten_d">10 min na (dagen)</label>
-          <input id="cmp_ten_d" type="number" min="0" step="1" value="2">
-          <label for="cmp_min_half">Half venster 1m (s)</label>
-          <input id="cmp_min_half" type="number" min="1" step="1" value="30">
-          <label for="cmp_ten_half">Half venster 10m (s)</label>
-          <input id="cmp_ten_half" type="number" min="1" step="1" value="300">
+        <div class="stage-block">
+          <div class="stage-title">Stage 1</div>
+          <label for="cmp_s1_age">Ouder dan (uur)</label>
+          <input id="cmp_s1_age" type="number" min="0" step="1" value="1">
+          <label for="cmp_s1_interval">Interval (s)</label>
+          <input id="cmp_s1_interval" type="number" min="1" step="1" value="60">
         </div>
-        <div class="hint">Compactie reduceert oude data tot vaste intervallen. De worker voert dit uit; pagina's lezen alleen.</div>
+        <div class="stage-block">
+          <div class="stage-title">Stage 2</div>
+          <label for="cmp_s2_age">Ouder dan (uur)</label>
+          <input id="cmp_s2_age" type="number" min="0" step="1" value="48">
+          <label for="cmp_s2_interval">Interval (s)</label>
+          <input id="cmp_s2_interval" type="number" min="1" step="1" value="600">
+        </div>
+        <div class="stage-block">
+          <div class="stage-title">Stage 3</div>
+          <label for="cmp_s3_age">Ouder dan (uur)</label>
+          <input id="cmp_s3_age" type="number" min="0" step="1" value="120">
+          <label for="cmp_s3_interval">Interval (s)</label>
+          <input id="cmp_s3_interval" type="number" min="1" step="1" value="3600">
+        </div>
+        <div class="hint">Compactie reduceert oude data tot vaste intervallen. Het half-venster wordt automatisch afgeleid uit het interval.</div>
         <div class="grid" style="grid-template-columns: 1fr 1fr; gap:8px; margin-top:8px;">
           <div>Status</div><div id="cmp_status">Idle</div>
           <div>Fase</div><div id="cmp_phase">-</div>

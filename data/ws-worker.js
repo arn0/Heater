@@ -11,10 +11,13 @@
 const DB_NAME = 'Snapshots';
 const DB_VERSION = 1;
 const DB_STORE_NAME = 'snapshots';
+const CFG_DB_NAME = 'WorkerSettings';
+const CFG_STORE_NAME = 'compaction';
 
 let db = null;
 let dbReady = false;
 let pendingWrites = [];
+let cfgDb = null;
 
 let host = null;
 let ws = null;
@@ -36,13 +39,15 @@ let compactStatus = {
   progressKey: null,
   startedAt: 0,
   finishedAt: 0,
-  stats: { written: 0, deleted: 0 }
+  stats: { written: 0, deleted: 0 },
+  error: null
 };
 let compactCfg = {
-  minutelyAfterSecs: 3600,      // compact to 1 min older than 1 hour
-  tenMinAfterSecs: 2*24*3600,   // compact to 10 min older than 2 days
-  minuteHalfWindow: 30,         // +/- 30s window
-  tenHalfWindow: 300            // +/- 300s window
+  stages: [
+    { olderThanSecs: 3600, targetIntervalSecs: 60 },
+    { olderThanSecs: 2 * 24 * 3600, targetIntervalSecs: 600 },
+    { olderThanSecs: 5 * 24 * 3600, targetIntervalSecs: 3600 }
+  ]
 };
 
 // Chart performance aggregation
@@ -78,6 +83,50 @@ function openDb() {
     req.onerror = () => {
       // stay in degraded mode; pages can still get live snapshots
     };
+  } catch (_) {}
+}
+
+function openConfigDb() {
+  try {
+    const req = indexedDB.open(CFG_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const dbx = req.result;
+      if (!dbx.objectStoreNames.contains(CFG_STORE_NAME)) {
+        dbx.createObjectStore(CFG_STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => {
+      cfgDb = req.result;
+      loadCompactCfgFromStore();
+    };
+  } catch (_) {}
+}
+
+function loadCompactCfgFromStore() {
+  if (!cfgDb) return;
+  try {
+    const tx = cfgDb.transaction(CFG_STORE_NAME, 'readonly');
+    const store = tx.objectStore(CFG_STORE_NAME);
+    const getReq = store.get('cfg');
+    getReq.onsuccess = () => {
+      const data = getReq.result;
+      if (data && data.cfg) {
+        if (applyCompactionCfg(data.cfg, true)) {
+          broadcastAll({ type: 'compactStatus', status: compactStatus, cfg: compactCfg });
+        }
+      } else {
+        persistCompactCfg();
+        broadcastAll({ type: 'compactStatus', status: compactStatus, cfg: compactCfg });
+      }
+    };
+  } catch (_) {}
+}
+
+function persistCompactCfg() {
+  if (!cfgDb) return;
+  try {
+    const tx = cfgDb.transaction(CFG_STORE_NAME, 'readwrite');
+    tx.objectStore(CFG_STORE_NAME).put({ id: 'cfg', cfg: compactCfg });
   } catch (_) {}
 }
 
@@ -120,19 +169,24 @@ function writeSnapshot(obj) {
 }
 
 function broadcastSubscribed(msg) {
-  for (const rec of ports) {
+  let changed = false;
+  for (const rec of Array.from(ports)) {
     if (rec.subscribe) {
-      try { rec.port.postMessage(msg); } catch (_) {}
+      if (!postToPort(rec, msg)) changed = true;
     }
   }
+  if (changed) broadcastClients();
 }
 function broadcastAll(msg) {
-  for (const rec of ports) {
-    try { rec.port.postMessage(msg); } catch (_) {}
+  let changed = false;
+  for (const rec of Array.from(ports)) {
+    if (!postToPort(rec, msg)) changed = true;
   }
+  if (changed) broadcastClients();
 }
 
 openDb();
+openConfigDb();
 
 self.onconnect = (e) => {
   const port = e.ports[0];
@@ -148,7 +202,13 @@ self.onconnect = (e) => {
       rec.subscribe = !!msg.subscribe;
       try { port.postMessage({ type: 'ready', dbReady, ws: wsState }); } catch (_) {}
     } else if (msg.type === 'compactStart') {
-      if (msg.cfg) applyCompactionCfg(msg.cfg);
+      if (msg.cfg && !applyCompactionCfg(msg.cfg)) {
+        compactStatus.running = false;
+        compactStatus.phase = 'idle';
+        compactStatus.error = 'Ongeldige configuratie';
+        broadcastAll({ type: 'compactStatus', status: compactStatus, cfg: compactCfg });
+        return;
+      }
       startCompaction();
     } else if (msg.type === 'compactStop') {
       compactStop = true;
@@ -167,6 +227,7 @@ self.onconnect = (e) => {
     } else if (msg.type === 'bye') {
       // Page is closing; remove and broadcast
       try { ports.delete(rec); } catch (_) {}
+      try { rec.port.close && rec.port.close(); } catch (_) {}
       broadcastClients();
     } else if (msg.type === 'sendText') {
       if (ws && ws.readyState === 1 && typeof msg.text === 'string') {
@@ -178,56 +239,112 @@ self.onconnect = (e) => {
 };
 
 function broadcastClients(){
-  try { broadcastAll({ type: 'clients', count: ports.size }); } catch (_) {}
+  const msg = { type: 'clients', count: ports.size };
+  let changed = false;
+  for (const rec of Array.from(ports)) {
+    if (!postToPort(rec, msg)) changed = true;
+  }
+  if (changed) broadcastClients();
 }
 
-function applyCompactionCfg(cfg){
-  if (typeof cfg.minutelyAfterSecs === 'number') compactCfg.minutelyAfterSecs = cfg.minutelyAfterSecs;
-  if (typeof cfg.tenMinAfterSecs === 'number') compactCfg.tenMinAfterSecs = cfg.tenMinAfterSecs;
-  if (typeof cfg.minuteHalfWindow === 'number') compactCfg.minuteHalfWindow = cfg.minuteHalfWindow;
-  if (typeof cfg.tenHalfWindow === 'number') compactCfg.tenHalfWindow = cfg.tenHalfWindow;
+function postToPort(rec, msg) {
+  try {
+    rec.port.postMessage(msg);
+    return true;
+  } catch (_) {
+    try { rec.port.close && rec.port.close(); } catch (_) {}
+    ports.delete(rec);
+    return false;
+  }
+}
+
+function applyCompactionCfg(cfg, fromLoad = false){
+  if (!cfg || !Array.isArray(cfg.stages)) return false;
+  const stages = cfg.stages.map((st) => {
+    const intervalVal = Number(st.targetIntervalSecs ?? st.interval ?? st.step);
+    return {
+      olderThanSecs: Math.floor(Number(st.olderThanSecs)),
+      targetIntervalSecs: Math.floor(intervalVal)
+    };
+  });
+  if (stages.length !== 3) return false;
+  if (stages.some(st => !isFinite(st.olderThanSecs) || st.olderThanSecs <= 0 || !isFinite(st.targetIntervalSecs) || st.targetIntervalSecs <= 0)) {
+    return false;
+  }
+  stages.sort((a, b) => a.olderThanSecs - b.olderThanSecs);
+  if (!(stages[0].olderThanSecs < stages[1].olderThanSecs && stages[1].olderThanSecs < stages[2].olderThanSecs)) {
+    return false;
+  }
+  compactCfg = { stages };
+  compactStatus.error = null;
+  if (!fromLoad) {
+    persistCompactCfg();
+    broadcastAll({ type: 'compactStatus', status: compactStatus, cfg: compactCfg });
+  }
+  return true;
 }
 
 function startCompaction(){
   if (compactRunning) return;
   compactRunning = true;
   compactStop = false;
-  compactStatus = { running: true, phase: 'start', progressKey: null, startedAt: Date.now(), finishedAt: 0, stats: { written: 0, deleted: 0 } };
+  compactStatus = {
+    running: true,
+    phase: 'start',
+    progressKey: null,
+    startedAt: Date.now(),
+    finishedAt: 0,
+    stats: { written: 0, deleted: 0 },
+    error: null
+  };
   broadcastAll({ type: 'compactStatus', status: compactStatus, cfg: compactCfg });
-  runCompaction().finally(() => {
-    compactRunning = false;
+  runCompaction().then(() => {
     compactStatus.running = false;
+    compactStatus.phase = 'idle';
+    compactStatus.progressKey = null;
     compactStatus.finishedAt = Date.now();
     broadcastAll({ type: 'compactStatus', status: compactStatus, cfg: compactCfg });
+  }).catch((err) => {
+    compactStatus.running = false;
+    compactStatus.phase = 'idle';
+    compactStatus.error = err ? String(err) : 'Compactie mislukt';
+    compactStatus.progressKey = null;
+    compactStatus.finishedAt = Date.now();
+    broadcastAll({ type: 'compactStatus', status: compactStatus, cfg: compactCfg });
+  }).finally(() => {
+    compactRunning = false;
   });
 }
 
 async function runCompaction(){
   if (!dbReady || !db) return;
   const nowSec = Math.floor(Date.now()/1000);
-  // Find oldest key
   const oldest = await findOldestKey();
-  if (typeof oldest !== 'number') return;
-  let key = 600 * Math.floor(oldest / 600);
+  if (typeof oldest !== 'number' || oldest <= 0) return;
+  const stagesAsc = compactCfg.stages.slice().sort((a, b) => a.olderThanSecs - b.olderThanSecs);
+  const stagesDesc = stagesAsc.slice().reverse();
+  if (!stagesDesc.length) return;
 
-  // Phase 1: 10-minute compaction for data older than tenMinAfterSecs
-  compactStatus.phase = '10min';
-  for (; key < nowSec - compactCfg.tenMinAfterSecs; key += 600){
-    if (compactStop) return;
-    compactStatus.progressKey = key;
-    if (await compactBucket(key, compactCfg.tenHalfWindow)) {
-      broadcastProgressThrottled();
-    }
-  }
+  let currentKey = Math.max(1, stagesDesc[0].targetIntervalSecs * Math.floor(oldest / stagesDesc[0].targetIntervalSecs));
 
-  // Phase 2: 1-minute compaction for data older than minutelyAfterSecs
-  compactStatus.phase = '1min';
-  for (; key < nowSec - compactCfg.minutelyAfterSecs; key += 60){
-    if (compactStop) return;
-    compactStatus.progressKey = key;
-    if (await compactBucket(key, compactCfg.minuteHalfWindow)) {
-      broadcastProgressThrottled();
+  for (const stage of stagesDesc) {
+    const interval = Math.max(1, stage.targetIntervalSecs | 0);
+    const half = Math.max(1, Math.floor(interval / 2));
+    const limit = nowSec - stage.olderThanSecs;
+    const stageIdx = stagesAsc.indexOf(stage) + 1;
+    compactStatus.phase = `stage${stageIdx}`;
+    if (limit <= 1) { currentKey = Math.max(currentKey, limit); continue; }
+    let key = Math.max(currentKey, interval * Math.floor(currentKey / interval));
+    if (key <= 0) key = interval;
+
+    for (; key < limit; key += interval) {
+      if (compactStop) return;
+      if (key <= 0) continue;
+      compactStatus.progressKey = key;
+      const changed = await compactBucket(key, half);
+      if (changed) broadcastProgressThrottled();
     }
+    currentKey = Math.max(key, limit);
   }
 }
 
@@ -247,7 +364,17 @@ function idbRange(low, high){
       const tx = db.transaction(DB_STORE_NAME, 'readonly');
       const store = tx.objectStore(DB_STORE_NAME);
       store.openCursor(IDBKeyRange.bound(low, high)).onsuccess = (e) => {
-        const c = e.target.result; if (c){ out.push(c.value); c.continue(); } else resolve(out); };
+        const c = e.target.result;
+        if (c) {
+          const val = c.value;
+          if (val && typeof val.time === 'number' && val.time > 0) {
+            out.push(val);
+          }
+          c.continue();
+        } else {
+          resolve(out);
+        }
+      };
     } catch (_) { resolve(out); }
   });
 }
@@ -255,8 +382,11 @@ function idbRange(low, high){
 function idbDeleteRange(low, high){
   return new Promise((resolve) => {
     try {
+      const l = Math.max(1, Math.floor(Math.min(low, high)));
+      const h = Math.max(1, Math.floor(Math.max(low, high)));
+      if (l > h) { resolve(); return; }
       const tx = db.transaction(DB_STORE_NAME, 'readwrite');
-      tx.objectStore(DB_STORE_NAME).delete(IDBKeyRange.bound(low, high));
+      tx.objectStore(DB_STORE_NAME).delete(IDBKeyRange.bound(l, h));
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
     } catch (_) { resolve(); }
@@ -280,15 +410,20 @@ async function findOldestKey(){
       const tx = db.transaction(DB_STORE_NAME, 'readonly');
       const store = tx.objectStore(DB_STORE_NAME);
       store.openKeyCursor(null, 'next').onsuccess = (e) => {
-        const cur = e.target.result; resolve(cur ? cur.key : undefined);
+        const cur = e.target.result;
+        if (!cur) { resolve(undefined); return; }
+        if (typeof cur.key === 'number' && cur.key > 0) {
+          resolve(cur.key);
+        } else {
+          cur.continue();
+        }
       };
     } catch (_) { resolve(undefined); }
   });
 }
 
 async function compactBucket(centerSec, halfWindowSec){
-  const low = centerSec - halfWindowSec + 1; // exclude center to avoid deleting the new one accidentally
-  const high = centerSec + halfWindowSec;
+  if (centerSec <= 0) return false;
   const buf = await idbRange(centerSec - halfWindowSec, centerSec + halfWindowSec);
   if (!buf || buf.length <= 1) return false;
   const mid = Math.floor(buf.length/2);
@@ -296,36 +431,41 @@ async function compactBucket(centerSec, halfWindowSec){
   rec.time = centerSec;
   const ok = await idbPut(rec);
   if (ok){
+    compactStatus.stats.written += 1;
+    compactStatus.stats.deleted += Math.max(0, buf.length - 1);
     await idbDeleteRange(centerSec - halfWindowSec, centerSec - 1);
     await idbDeleteRange(centerSec + 1, centerSec + halfWindowSec);
-    compactStatus.stats.written += 1;
-    // Approx deleted count not exact
   }
   return ok;
 }
 
-function meanOf(arr, sel){
+function meanOf(arr, sel, fallback){
   let s=0, n=0; for (const x of arr){ const v = sel(x); if (typeof v === 'number' && isFinite(v)) { s+=v; n++; } }
-  return n? s/n : undefined;
+  if (n) return s/n;
+  if (typeof fallback === 'number' && isFinite(fallback)) return fallback;
+  return undefined;
 }
 function averageRecords(buf, mid){
   const m = buf[mid] || {};
+  const anyOne = buf.some(d => d && d.one_pwr);
+  const anyTwo = buf.some(d => d && d.two_pwr);
+  const allSafe = buf.every(d => !d || d.safe !== false);
+  const allBlue = buf.every(d => !d || d.blue !== false);
   return {
-    target: meanOf(buf, d=>d.target),
-    fnt: meanOf(buf, d=>d.fnt),
-    bck: meanOf(buf, d=>d.bck),
-    top: meanOf(buf, d=>d.top),
-    bot: meanOf(buf, d=>d.bot),
-    chip: meanOf(buf, d=>d.chip),
-    rem: meanOf(buf, d=>d.rem),
-    voltage: meanOf(buf, d=>d.voltage),
-    current: meanOf(buf, d=>d.current),
-    power: meanOf(buf, d=>d.power),
+    target: meanOf(buf, d=>d.target, m.target),
+    fnt: meanOf(buf, d=>d.fnt, m.fnt),
+    bck: meanOf(buf, d=>d.bck, m.bck),
+    top: meanOf(buf, d=>d.top, m.top),
+    bot: meanOf(buf, d=>d.bot, m.bot),
+    chip: meanOf(buf, d=>d.chip, m.chip),
+    rem: meanOf(buf, d=>d.rem, m.rem),
+    voltage: meanOf(buf, d=>d.voltage, m.voltage),
+    current: meanOf(buf, d=>d.current, m.current),
+    power: meanOf(buf, d=>d.power, m.power),
     energy: m.energy,
-    pf: m.pf,
-    one_pwr: m.one_pwr,
-    two_pwr: m.two_pwr,
-    safe: m.safe,
-    blue: m.blue
+    one_pwr: anyOne,
+    two_pwr: anyTwo,
+    safe: allSafe,
+    blue: allBlue
   };
 }
