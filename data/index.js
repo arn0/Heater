@@ -161,7 +161,10 @@ function initButtons() {
 	document.getElementById('night_time').addEventListener('change', day_night);
 	document.getElementById('night_target').addEventListener('change', day_night);
 	document.getElementById('night_check').addEventListener('change', day_night);
-	overrideClear.addEventListener('click', clearOverride);
+	if (overrideClear) {
+		overrideClear.addEventListener('click', clearOverride);
+		overrideClear.disabled = true;
+	}
     // Quick actions removed from UI
     if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
     const upOpen = document.getElementById('upload_open') || document.getElementById('upload_icon');
@@ -699,33 +702,36 @@ function applySnapshot(update) {
     }
   }
 
-  if (update.schedule) {
-    if (typeof update.schedule.target === 'number') {
-      scheduledTarget.textContent = update.schedule.target.toFixed(1);
+  // Read schedule state from worker meta (not from snapshots)
+  if (latestSchedule) {
+    const sched = latestSchedule;
+    if (typeof sched.target === 'number') {
+      scheduledTarget.textContent = sched.target.toFixed(1);
     }
     let modeLabel = 'Dag';
-    if (update.schedule.preheat) {
+    if (sched.preheat) {
       modeLabel = 'Voorverwarmen';
-    } else if (!update.schedule.is_day) {
+    } else if (!sched.is_day) {
       modeLabel = 'Nacht';
     }
     scheduleMode.textContent = modeLabel;
-    if (typeof update.schedule.minutes_to_next === 'number') {
-      scheduleNext.textContent = formatMinutes(update.schedule.minutes_to_next);
+    if (typeof sched.minutes_to_next === 'number') {
+      scheduleNext.textContent = formatMinutes(sched.minutes_to_next);
     }
-    if (update.schedule.override) {
-      // Localized override text (Dutch)
+    if (sched.override) {
       let overrideText = 'Handmatig';
-      if (typeof update.schedule.override_target === 'number') {
-        overrideText = `Handmatig ${update.schedule.override_target.toFixed(1)} °C`;
+      if (typeof sched.override_target === 'number') {
+        overrideText = `Handmatig ${sched.override_target.toFixed(1)} °C`;
       }
-      if (update.schedule.override_until) {
-        const until = new Date(update.schedule.override_until * 1000);
+      if (sched.override_until) {
+        const until = new Date(sched.override_until * 1000);
         overrideText += ` tot ${until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
       }
       overrideState.textContent = overrideText;
+      if (overrideClear) overrideClear.disabled = false;
     } else {
       overrideState.textContent = 'Uit';
+      if (overrideClear) overrideClear.disabled = true;
     }
   }
   countRecords();

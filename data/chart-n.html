@@ -7,32 +7,61 @@
   <link rel="icon" href="favicon.ico">
   <style>
     :root {
-      --bg: #ffffff;
-      --fg: #111;
-      --muted: #666;
-      --accent: #8C3636;
-      --room: #d22;
-      --target: #b0b;
-      --power: #1e88e5;
-      --stage1: rgba(255, 160, 0, 0.10);
-      --stage2: rgba(239, 83, 80, 0.12);
-      --grid: #e6e6e6;
+      --bg: #141a21;
+      --panel: #1a232e;
+      --border: #2a3542;
+      --text: #e7ecf2;
+      --muted: #9fb0c1;
+      --accent: #3aa0ff;
+      --room: #ff6b6b;
+      --target: #caa5ff;
+      --stage1: rgba(239, 83, 80, 0.12);
+      --stage2: rgba(239, 83, 80, 0.22);
+      --stageBoth: rgba(239, 83, 80, 0.32);
+      --grid: rgba(255,255,255,0.08);
     }
-    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    header { display:flex; align-items:center; gap:12px; padding: 10px 12px; border-bottom: 1px solid #ddd; }
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) {
+        --bg: #eef2f6;
+        --panel: #f6f8fb;
+        --border: #d7dde5;
+        --text: #111;
+        --muted: #586175;
+        --accent: #8C3636;
+        --room: #d22;
+        --target: #a455e5;
+        --stage1: rgba(239, 83, 80, 0.14);
+        --stage2: rgba(239, 83, 80, 0.26);
+        --stageBoth: rgba(239, 83, 80, 0.36);
+        --grid: rgba(0,0,0,0.08);
+      }
+    }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    header { display:flex; align-items:center; gap:12px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
     header a { color: var(--accent); text-decoration: none; font-weight: 600; }
     header a:hover { text-decoration: underline; }
-    h1 { font-size: 18px; margin: 0; }
-    .toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding: 10px 12px; font-size: 14px; color: var(--muted); }
+    h1 { font-size: 18px; margin: 0; color: var(--text); }
+    .toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding: 10px 12px; font-size: 14px; color: var(--muted); background: var(--panel); border-bottom:1px solid var(--border); }
     .toolbar label { display:flex; align-items:center; gap:6px; }
-    .toolbar select { font-size: 14px; }
+    .toolbar input[type="checkbox"] { accent-color: var(--accent); }
+    .toolbar select { font-size: 14px; background: var(--panel); color: var(--text); border:1px solid var(--border); border-radius:8px; padding:4px 6px; }
     .wrap { padding: 0 8px 12px; }
-    #canvasWrap { position: relative; height: 60vh; max-height: 520px; border-top: 1px solid #eee; border-bottom: 1px solid #eee; background: #fff; }
+    #canvasWrap { position: relative; height: 60vh; max-height: 520px; border: 1px solid var(--border); border-radius:12px; background: var(--panel); box-shadow: 0 8px 28px rgba(0,0,0,.25); }
     canvas { width: 100%; height: 100%; display: block; }
     .legend { display:flex; gap:16px; align-items:center; padding: 8px 12px; font-size: 13px; color: var(--muted); }
     .swatch { width:12px; height:12px; border-radius:2px; display:inline-block; margin-right:6px; }
     .hint { padding: 6px 12px; font-size: 12px; color: var(--muted); }
   </style>
+  <script>
+    (function(){
+      try {
+        const saved = localStorage.getItem('theme');
+        if (saved === 'dark') document.documentElement.setAttribute('data-theme','dark');
+        else if (saved === 'light') document.documentElement.setAttribute('data-theme','light');
+        else document.documentElement.removeAttribute('data-theme');
+      } catch (_) {}
+    })();
+  </script>
 </head>
 <body>
   <header>
@@ -65,7 +94,6 @@
     <div class="legend">
       <span><span class="swatch" style="background: var(--room)"></span>Kamer</span>
       <span><span class="swatch" style="background: var(--target)"></span>Doel</span>
-      <span><span class="swatch" style="background: var(--power)"></span>Vermogen (W)</span>
     </div>
     <div class="hint">Zoomen: scroll/knijp. Pannen: slepen. Dubbelklik om te resetten.</div>
   </div>
