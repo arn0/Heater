@@ -1,6 +1,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/timers.h"
 #include <time.h>
+#include <cmath>
 
 #include "ArduinoJson.h"
 
@@ -21,6 +22,11 @@ namespace MyJsonNamespace {
 		this->doc["bot"] = heater_status.bot;
 		this->doc["chip"] = heater_status.chip;
 		this->doc["rem"] = heater_status.rem;
+		if ( std::isfinite( heater_status.out ) ) {
+			this->doc["out"] = heater_status.out;
+		} else {
+			this->doc["out"] = nullptr;
+		}
 		this->doc["voltage"] = heater_status.voltage;
 		this->doc["current"] = heater_status.current;
 		this->doc["power"] = heater_status.power;

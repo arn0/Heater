@@ -26,6 +26,7 @@ const te_bck = document.getElementById("te_bck");
 const te_top = document.getElementById("te_top");
 const te_bot = document.getElementById("te_bot");
 const te_chp = document.getElementById("te_chp");
+const te_out = document.getElementById("te_out");
 
 const volt = document.getElementById("volt");
 const amp = document.getElementById("amp");
@@ -54,6 +55,8 @@ let lastCompactCfg = {
     { olderThanSecs: 120 * 3600, targetIntervalSecs: 3600 }
   ]
 };
+
+let latestSchedule = null;
 
 var gateway = `ws://${window.location.hostname}/ws`;
 //var gateway = `ws://heater.local/ws`;
@@ -129,6 +132,7 @@ var counter = 0;
 function onMessage(event) {
 	if (useShared) return; // using worker path
 	update = JSON.parse(event.data);
+	latestSchedule = update && update.schedule ? { ...update.schedule } : null;
 	addSnapshot(update);
 	pending = update;
 	scheduleRender();
@@ -667,6 +671,13 @@ function applySnapshot(update) {
   te_top.textContent = update.top.toFixed(1);
   te_bot.textContent = update.bot.toFixed(1);
   te_chp.textContent = update.chip.toFixed(1);
+  if (te_out) {
+    if (typeof update.out === 'number' && Number.isFinite(update.out)) {
+      te_out.textContent = update.out.toFixed(1);
+    } else {
+      te_out.textContent = '--.-';
+    }
+  }
   target.textContent = update.target.toFixed(1);
   volt.textContent = update.voltage.toFixed(1);
   amp.textContent = update.current.toFixed(3);
@@ -929,6 +940,7 @@ function onWorkerMessage(ev){
   if (msg.type === 'snapshot') {
     // Receiving data implies WS is up; ensure indicator shows online
     wifi.style.background = '#00c4fa'; if (offlineBanner) offlineBanner.hidden = true;
+    latestSchedule = msg.data && msg.data.schedule ? { ...msg.data.schedule } : null;
     pending = msg.data;
     // Do not write to IDB here — worker is the writer
     scheduleRender();

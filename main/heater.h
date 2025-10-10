@@ -26,6 +26,7 @@ struct heater_status {
 	float top;
 	float chip;
 	float rem;
+	float out;
 	float voltage;
 	float current;
 	float power; 		// Active Power P. or Real Power W.

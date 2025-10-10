@@ -15,6 +15,7 @@
       --accent: #3aa0ff;
       --room: #ff6b6b;
       --target: #caa5ff;
+      --outside: #2ec4ff;
       --stage1: rgba(239, 83, 80, 0.12);
       --stage2: rgba(239, 83, 80, 0.22);
       --stageBoth: rgba(239, 83, 80, 0.32);
@@ -30,6 +31,7 @@
         --accent: #8C3636;
         --room: #d22;
         --target: #a455e5;
+        --outside: #0074d9;
         --stage1: rgba(239, 83, 80, 0.14);
         --stage2: rgba(239, 83, 80, 0.26);
         --stageBoth: rgba(239, 83, 80, 0.36);
@@ -72,8 +74,9 @@
   </header>
 
   <div class="toolbar">
-    <label><input type="checkbox" id="showRoom" checked> Kamer</label>
+    <label><input type="checkbox" id="showRoom" checked> Ruimte</label>
     <label><input type="checkbox" id="showTarget" checked> Doel</label>
+    <label><input type="checkbox" id="showOutside" checked> Buiten</label>
     <label><input type="checkbox" id="showStages" checked> Elementen I/II</label>
 
     <label style="margin-left:auto">Tijd:
@@ -92,8 +95,9 @@
       <canvas id="chartCanvas"></canvas>
     </div>
     <div class="legend">
-      <span><span class="swatch" style="background: var(--room)"></span>Kamer</span>
+      <span><span class="swatch" style="background: var(--room)"></span>Ruimte</span>
       <span><span class="swatch" style="background: var(--target)"></span>Doel</span>
+      <span><span class="swatch" style="background: var(--outside)"></span>Buiten</span>
     </div>
     <div class="hint">Zoomen: scroll/knijp. Pannen: slepen. Dubbelklik om te resetten.</div>
   </div>

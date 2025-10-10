@@ -24,6 +24,7 @@
 #include "lvgl_ui.h"
 #include "json.h"
 #include "config.h"
+#include "knmi.h"
 #include <time.h>
 
 #define HEATER_WEB_STEP 0.1
@@ -390,6 +391,10 @@ static esp_err_t get_ws_handler( httpd_req_t *req ) {
 				ESP_LOGW( TAG, "Failed to apply config update: %s", esp_err_to_name( handler_ret ) );
 			} else {
 				next_log_time = 0;
+			}
+			esp_err_t knmi_ret = knmi_handle_ws_command( (const char *)ws_pkt.payload );
+			if ( knmi_ret != ESP_OK && knmi_ret != ESP_ERR_INVALID_ARG ) {
+				ESP_LOGW( TAG, "Failed to handle KNMI command: %s", esp_err_to_name( knmi_ret ) );
 			}
 		} else {
 			switch ( ws_pkt.payload[0] ) {

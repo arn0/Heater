@@ -3,7 +3,10 @@
 #include "esp_mac.h"
 #include "esp_system.h"
 #include "esp_log.h"
+#include "esp_err.h"
 #include "driver/temperature_sensor.h"
+#include <math.h>
+#include <time.h>
 #include "ds18b20.h"
 #include "onewire_bus.h"
 #include "pzem004tv3.h"
@@ -14,6 +17,7 @@
 #include "lvgl_ui.h"
 #include "logger.h"
 #include "monitor.h"
+#include "knmi.h"
 
 #define HEATER_ONEWIRE_MAX_DS18B20 4 // No more then 4 installed
 
@@ -51,6 +55,9 @@ time_t log_saved_time, log_update_time;
 #endif
 
 time_t now, next_heap_time;
+static time_t next_knmi_fetch = 0;
+#define KNMI_FETCH_INTERVAL_SECONDS (10 * 60)
+#define KNMI_RETRY_INTERVAL_SECONDS 60
 
 int32_t start_pzem;
 #define WAIT_PZEM 3
@@ -134,6 +141,38 @@ void monitor_task() {
 			}
 
 			time( &now );
+			if (heater_status.wifi) {
+				if (next_knmi_fetch == 0) {
+					next_knmi_fetch = now;
+				}
+				if (now >= next_knmi_fetch) {
+					knmi_sample_t sample = {0};
+					ESP_LOGI( TAG, "Trigger KNMI fetch (instant)" );
+					esp_err_t knmi_err = knmi_fetch_point(now, &sample);
+					if (knmi_err == ESP_OK && isfinite(sample.temperature)) {
+						heater_status.out = sample.temperature;
+						struct tm sample_tm;
+						gmtime_r(&sample.timestamp, &sample_tm);
+						char ts_buf[24];
+						strftime(ts_buf, sizeof(ts_buf), "%H:%M:%S", &sample_tm);
+						ESP_LOGI( TAG, "KNMI outside temperature %.1f°C applied (sample %s UTC)", sample.temperature, ts_buf );
+					} else if (knmi_err == ESP_ERR_NOT_FOUND) {
+						ESP_LOGI( TAG, "KNMI data not yet available" );
+					} else {
+						ESP_LOGW( TAG, "KNMI fetch failed: %s", esp_err_to_name( knmi_err ) );
+					}
+					time_t delay = KNMI_FETCH_INTERVAL_SECONDS;
+					if (knmi_err == ESP_ERR_INVALID_STATE || knmi_err == ESP_ERR_NOT_FOUND) {
+						delay = KNMI_RETRY_INTERVAL_SECONDS;
+					}
+					next_knmi_fetch = now + delay;
+				}
+			} else {
+				if (next_knmi_fetch != 0) {
+					next_knmi_fetch = 0;
+					ESP_LOGD( TAG, "KNMI fetch paused (Wi-Fi down)" );
+				}
+			}
 #ifdef ENABLE_LOG
 			if ( now > log_update_time + 60 ) {
 				log_add();
@@ -249,7 +288,7 @@ bool monitor_task_start() {
 	log_read();
 #endif
 
-	xTaskCreate( monitor_task, "monitor", 4096, NULL, MONITOR_TASK_PRIORITY, NULL );
+	xTaskCreate( monitor_task, "monitor", 4096 + 4096, NULL, MONITOR_TASK_PRIORITY, NULL );
 
 	return ( true );
 }

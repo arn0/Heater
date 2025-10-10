@@ -2,6 +2,7 @@
 #include "freertos/task.h"
 #include "esp_system.h"
 #include "esp_log.h"
+#include <math.h>
 
 #include "gpio_pins.h"
 #include "heater.h"
@@ -112,6 +113,7 @@ bool heater_task_start() {
 	heater_status.override_active = false;
 	heater_status.override_target = 0.0f;
 	heater_status.override_expires = 0;
+	heater_status.out = NAN;
 
 	// Now we start the heater contol loop
 

@@ -28,6 +28,14 @@ let reconnectIdx = 0;
 let latestSnapshot = null;
 let flushTimer = null; // coalesce to <= 10Hz
 
+const KNMI_MIN_WINDOW = 600;
+const KNMI_MAX_WINDOW = 6 * 3600;
+let knmiWindowSecs = KNMI_MIN_WINDOW;
+let knmiWindowLastSent = 0;
+let pendingKnmiPayload = null;
+let knmiWindowTimer = null;
+let knmiRecalcScheduled = false;
+
 const ports = new Set(); // { port, subscribe }
 
 // Compaction state
@@ -75,7 +83,10 @@ function openDb() {
             const obj = pendingWrites.shift();
             try { store.put(obj); } catch (_) {}
           }
+          tx.oncomplete = () => scheduleKnmiWindowCheck();
         } catch (_) {}
+      } else {
+        scheduleKnmiWindowCheck();
       }
       // notify all connected pages that DB is ready
       try { broadcastAll({ type: 'dbReady' }); } catch (_) {}
@@ -138,6 +149,7 @@ function connectWs() {
       wsState = 'open';
       reconnectIdx = 0;
       broadcastAll({ type: 'ws', state: 'open' });
+      trySendKnmiWindow();
     };
     ws.onclose = () => {
       wsState = 'closed';
@@ -165,6 +177,7 @@ function writeSnapshot(obj) {
   try {
     const tx = db.transaction(DB_STORE_NAME, 'readwrite');
     tx.objectStore(DB_STORE_NAME).put(obj);
+    tx.oncomplete = () => scheduleKnmiWindowCheck();
   } catch (_) { /* ignore */ }
 }
 
@@ -255,6 +268,123 @@ function postToPort(rec, msg) {
     try { rec.port.close && rec.port.close(); } catch (_) {}
     ports.delete(rec);
     return false;
+  }
+}
+
+function scheduleKnmiWindowCheck(delayMs = 0) {
+  if (knmiRecalcScheduled) return;
+  knmiRecalcScheduled = true;
+  setTimeout(() => {
+    knmiRecalcScheduled = false;
+    computeKnmiWindow();
+  }, Math.max(0, delayMs));
+}
+
+function computeKnmiWindow() {
+  if (!dbReady || !db) return;
+  const MAX_SCAN = 720;
+  let latestTime = null;
+  let lastValidTime = null;
+  let scanned = 0;
+  let finished = false;
+  try {
+    const tx = db.transaction(DB_STORE_NAME, 'readonly');
+    const store = tx.objectStore(DB_STORE_NAME);
+    const req = store.openCursor(null, 'prev');
+    req.onsuccess = (ev) => {
+      if (finished) return;
+      const cursor = ev.target.result;
+      if (!cursor) {
+        finalize();
+        return;
+      }
+      const record = cursor.value;
+      if (record && typeof record.time === 'number') {
+        if (latestTime === null) latestTime = record.time;
+        const hasOut = typeof record.out === 'number' && Number.isFinite(record.out);
+        if (hasOut) {
+          lastValidTime = record.time;
+          finalize();
+          return;
+        }
+      }
+      if (++scanned >= MAX_SCAN) {
+        finalize();
+        return;
+      }
+      cursor.continue();
+    };
+    req.onerror = () => finalize();
+    tx.oncomplete = () => finalize();
+  } catch (_) {
+    finalize();
+  }
+
+  function finalize() {
+    if (finished) return;
+    finished = true;
+    let desired = KNMI_MIN_WINDOW;
+    if (latestTime !== null) {
+      if (lastValidTime !== null) {
+        const gapSecs = Math.max(0, latestTime - lastValidTime);
+        if (gapSecs > 0) {
+          desired = Math.min(KNMI_MAX_WINDOW, Math.max(KNMI_MIN_WINDOW, gapSecs + KNMI_MIN_WINDOW));
+        }
+      } else {
+        const nowSecs = Math.floor(Date.now() / 1000);
+        const ageSecs = Math.max(0, nowSecs - latestTime);
+        desired = Math.min(KNMI_MAX_WINDOW, Math.max(KNMI_MIN_WINDOW, ageSecs + KNMI_MIN_WINDOW));
+      }
+    }
+    sendKnmiWindow(desired);
+  }
+}
+
+function sendKnmiWindow(windowSecs) {
+  if (!Number.isFinite(windowSecs)) return;
+  let adjusted = Math.round(windowSecs / 60) * 60;
+  if (!Number.isFinite(adjusted) || adjusted <= 0) adjusted = KNMI_MIN_WINDOW;
+  adjusted = Math.max(KNMI_MIN_WINDOW, Math.min(KNMI_MAX_WINDOW, adjusted));
+  if (Math.abs(adjusted - knmiWindowSecs) < 60) return;
+  knmiWindowSecs = adjusted;
+  pendingKnmiPayload = JSON.stringify({ type: 'knmi', window_secs: adjusted });
+  trySendKnmiWindow();
+}
+
+function trySendKnmiWindow() {
+  if (!pendingKnmiPayload) return;
+  const now = Date.now();
+  const throttleMs = 5000;
+  if (now - knmiWindowLastSent < throttleMs) {
+    const wait = throttleMs - (now - knmiWindowLastSent);
+    if (!knmiWindowTimer) {
+      knmiWindowTimer = setTimeout(() => {
+        knmiWindowTimer = null;
+        trySendKnmiWindow();
+      }, Math.max(50, wait));
+    }
+    return;
+  }
+  if (ws && ws.readyState === 1) {
+    try {
+      ws.send(pendingKnmiPayload);
+      knmiWindowLastSent = now;
+      pendingKnmiPayload = null;
+    } catch (_) {
+      if (!knmiWindowTimer) {
+        knmiWindowTimer = setTimeout(() => {
+          knmiWindowTimer = null;
+          trySendKnmiWindow();
+        }, throttleMs);
+      }
+    }
+  } else {
+    if (!knmiWindowTimer) {
+      knmiWindowTimer = setTimeout(() => {
+        knmiWindowTimer = null;
+        trySendKnmiWindow();
+      }, 1000);
+    }
   }
 }
 

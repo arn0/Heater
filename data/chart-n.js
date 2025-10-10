@@ -12,8 +12,8 @@ let websocket;
 let swPort = null;
 let canvas, ctx;
 let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-let plot = []; // {time(ms), rem, target, power, one_pwr, two_pwr}
-let showRoom = true, showTarget = true, showStages = true;
+let plot = []; // {time(ms), rem, target, out, power, one_pwr, two_pwr}
+let showRoom = true, showTarget = true, showOutside = true, showStages = true;
 let followLive = true;
 let lastUpdateTs = Date.now();
 
@@ -24,6 +24,7 @@ let viewEndMs = Date.now();
 // UI refs
 const elShowRoom = document.getElementById('showRoom');
 const elShowTarget = document.getElementById('showTarget');
+const elShowOutside = document.getElementById('showOutside');
 const elShowStages = document.getElementById('showStages');
 const elWindow = document.getElementById('timeWindow');
 
@@ -40,8 +41,13 @@ function onLoad() {
 }
 
 function bindUI() {
+  showRoom = elShowRoom.checked;
+  showTarget = elShowTarget.checked;
+  showOutside = elShowOutside.checked;
+  showStages = elShowStages.checked;
   elShowRoom.addEventListener('change', () => { showRoom = elShowRoom.checked; scheduleDraw(); });
   elShowTarget.addEventListener('change', () => { showTarget = elShowTarget.checked; scheduleDraw(); });
+  elShowOutside.addEventListener('change', () => { showOutside = elShowOutside.checked; scheduleDraw(); });
   elShowStages.addEventListener('change', () => { showStages = elShowStages.checked; scheduleDraw(); });
   elWindow.addEventListener('change', () => {
     const hours = parseInt(elWindow.value, 10) || DEFAULT_HOURS;
@@ -188,6 +194,7 @@ function refreshData() {
         time: r.time * 1000,
         rem: r.rem,
         target: r.target,
+        out: r.out,
         power: r.power,
         one_pwr: r.one_pwr,
         two_pwr: r.two_pwr
@@ -232,6 +239,7 @@ function draw() {
   for (const p of visible) {
     if (typeof p.rem === 'number') { yMin = Math.min(yMin, p.rem); yMax = Math.max(yMax, p.rem); }
     if (typeof p.target === 'number') { yMin = Math.min(yMin, p.target); yMax = Math.max(yMax, p.target); }
+    if (typeof p.out === 'number') { yMin = Math.min(yMin, p.out); yMax = Math.max(yMax, p.out); }
   }
   if (!isFinite(yMin) || !isFinite(yMax) || yMin === yMax) { yMin = 18; yMax = 22; }
   const yPad = 0.5;
@@ -245,8 +253,9 @@ function draw() {
 
   // lijnen
   const maxPts = Math.max(200, Math.floor(chartW / 2));
-  if (showRoom) drawLine(decimate(visible, maxPts, v => v.rem), padL, padT, chartW, chartH, yMin, yMax, '#d22');
-  if (showTarget) drawLine(decimate(visible, maxPts, v => v.target), padL, padT, chartW, chartH, yMin, yMax, '#b0b');
+  if (showRoom) drawLine(decimate(visible, maxPts, v => v.rem), padL, padT, chartW, chartH, yMin, yMax, getCss('--room'));
+  if (showTarget) drawLine(decimate(visible, maxPts, v => v.target), padL, padT, chartW, chartH, yMin, yMax, getCss('--target'));
+  if (showOutside) drawLine(decimate(visible, maxPts, v => v.out), padL, padT, chartW, chartH, yMin, yMax, getCss('--outside'));
 
   function drawAxesOnly() {
     drawGridAndAxes(padL, padT, chartW, chartH, 18, 22);
