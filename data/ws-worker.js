@@ -36,15 +36,56 @@ let pendingKnmiPayload = null;
 let knmiWindowTimer = null;
 let knmiRecalcScheduled = false;
 
-const BACKFILL_WINDOW_SECS = 2 * 24 * 3600;
-const BACKFILL_INTERVAL_MS = 60 * 60 * 1000;
-const BACKFILL_RETRY_MS = 10 * 60 * 1000;
+const BACKFILL_WINDOW_SECS = 1 * 24 * 3600;
+const BACKFILL_INTERVAL_MS = 1 * 60 * 1000;
+const BACKFILL_RETRY_MS = 1 * 60 * 1000;
+const BACKFILL_MAX_ATTEMPTS = 5;
+const BACKFILL_SKIP_MS = 6 * 60 * 60 * 1000;
+const BACKFILL_STEP_SECS = 600; // KNMI data cadence (10 minutes)
 const BAD_OUT_VALUE = 5.7067;
 const BAD_OUT_TOLERANCE = 0.005;
+let knmiDryRun = false;
 
 let backfillTimer = null;
 let backfillInFlight = null;
 let backfillQueue = [];
+const backfillFailures = new Map(); // windowStart -> attempt count
+const backfillSkipped = new Map(); // windowStart -> timestamp (ms) until retry allowed
+const missingSnapshotLogged = new Set();
+
+function shouldSkipBackfillWindow(windowStart) {
+  if (!Number.isFinite(windowStart)) return false;
+  const expiry = backfillSkipped.get(windowStart);
+  if (!expiry) return false;
+  if (Date.now() >= expiry) {
+    backfillSkipped.delete(windowStart);
+    return false;
+  }
+  return true;
+}
+
+function registerBackfillFailure(windowStart, reason) {
+  if (!Number.isFinite(windowStart)) return { retry: false, skipped: false };
+  const attempts = (backfillFailures.get(windowStart) || 0) + 1;
+  backfillFailures.set(windowStart, attempts);
+  const iso = new Date(windowStart * 1000).toISOString();
+  const why = reason ? String(reason) : 'unknown';
+  if (attempts >= BACKFILL_MAX_ATTEMPTS) {
+    backfillFailures.delete(windowStart);
+    const until = Date.now() + BACKFILL_SKIP_MS;
+    backfillSkipped.set(windowStart, until);
+    console.log('[KNMI] skipping backfill window', iso, 'for', Math.round(BACKFILL_SKIP_MS / 60000), 'minutes (reason:', why + ')');
+    return { retry: false, skipped: true };
+  }
+  console.log('[KNMI] backfill retry', iso, 'attempt', attempts, 'reason:', why);
+  return { retry: true, skipped: false };
+}
+
+function clearBackfillState(windowStart) {
+  if (!Number.isFinite(windowStart)) return;
+  backfillFailures.delete(windowStart);
+  backfillSkipped.delete(windowStart);
+}
 
 const ports = new Set(); // { port, subscribe }
 
@@ -425,13 +466,174 @@ function trySendKnmiWindow() {
   }
 }
 
+
+function dirtyReasons(record) {
+  const reasons = [];
+  if (!record) return reasons;
+  const value = record.out;
+  if (typeof value !== 'number' || !Number.isFinite(value)) reasons.push('out_missing');
+  else if (Math.abs(value - BAD_OUT_VALUE) < BAD_OUT_TOLERANCE) reasons.push('out_invalid');
+  if ('pf' in record) reasons.push('has_pf');
+  if (record.schedule) reasons.push('has_schedule');
+  if (record.config) reasons.push('has_config');
+  return reasons;
+}
+
 function needsOutBackfill(record) {
   if (!record) return false;
   const value = record.out;
-  if (typeof value !== 'number') return true;
-  if (!Number.isFinite(value)) return true;
-  if (Math.abs(value - BAD_OUT_VALUE) < BAD_OUT_TOLERANCE) return true;
-  return false;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return true;
+  return Math.abs(value - BAD_OUT_VALUE) < BAD_OUT_TOLERANCE;
+}
+
+function prepareBackfillUpdate(record, temp) {
+  if (!record) return { modified: false, updated: null, reasons: [] };
+  const reasons = dirtyReasons(record);
+  if (!reasons.length) return { modified: false, updated: null, reasons };
+  const updated = { ...record };
+  let modified = false;
+  if (reasons.includes('has_schedule') && 'schedule' in updated) {
+    delete updated.schedule;
+    modified = true;
+  }
+  if (reasons.includes('has_config') && 'config' in updated) {
+    delete updated.config;
+    modified = true;
+  }
+  if (reasons.includes('has_pf') && 'pf' in updated) {
+    delete updated.pf;
+    modified = true;
+  }
+  if (reasons.includes('out_missing') || reasons.includes('out_invalid')) {
+    updated.out = temp;
+    modified = true;
+  }
+  return { modified, updated, reasons };
+}
+
+function debugLogNearbySnapshots(store, target) {
+  try {
+    const delta = 1800; // +/-30 min window
+    const lower = Math.max(1, Math.floor(target - delta));
+    const upper = Math.max(lower, Math.floor(target + delta));
+    const range = IDBKeyRange.bound(lower, upper);
+    const nearby = [];
+    store.openCursor(range).onsuccess = (ev) => {
+      const cursor = ev.target.result;
+      if (!cursor) {
+        if (nearby.length) {
+          console.log('[KNMI] nearby snapshots around', new Date(target * 1000).toISOString(), nearby);
+        } else {
+          console.log('[KNMI] no nearby snapshots around', new Date(target * 1000).toISOString());
+        }
+        return;
+      }
+      const val = cursor.value;
+      if (val && typeof val.time !== 'undefined') {
+        nearby.push({
+          time: val.time,
+          out: val.out,
+          hasPf: 'pf' in val,
+          hasSchedule: !!val.schedule,
+          hasConfig: !!val.config
+        });
+        if (nearby.length >= 5) {
+          console.log('[KNMI] nearby snapshots around', new Date(target * 1000).toISOString(), nearby);
+          return;
+        }
+      }
+      cursor.continue();
+    };
+  } catch (_) {
+    // ignore
+  }
+}
+
+function fetchSnapshotForTime(store, originalTime, callback) {
+  const target = Number(originalTime);
+  const tried = new Set();
+  let settled = false;
+
+  function finish(record, keyUsed) {
+    if (settled) return;
+    settled = true;
+    if (!record && Number.isFinite(target) && !missingSnapshotLogged.has(target)) {
+      missingSnapshotLogged.add(target);
+      debugLogNearbySnapshots(store, target);
+    }
+    callback(record || null, keyUsed);
+  }
+
+  function tryGet(key) {
+    if (key === undefined || key === null) {
+      return false;
+    }
+    if (tried.has(key)) {
+      return false;
+    }
+    tried.add(key);
+    let req;
+    try {
+      req = store.get(key);
+    } catch (_) {
+      return false;
+    }
+    req.onsuccess = () => {
+      const record = req.result;
+      if (record !== undefined && record !== null) {
+        finish(record, key);
+      } else {
+        nextAttempt();
+      }
+    };
+    req.onerror = () => nextAttempt();
+    return true;
+  }
+
+  function scanAll() {
+    try {
+      const cursorReq = store.openCursor();
+      cursorReq.onsuccess = (ev) => {
+        const cursor = ev.target.result;
+        if (!cursor) {
+          finish(null, target);
+          return;
+        }
+        const curKey = cursor.key;
+        if (Number(curKey) === target || String(curKey) === String(originalTime)) {
+          finish(cursor.value || null, curKey);
+          return;
+        }
+        cursor.continue();
+      };
+      cursorReq.onerror = () => finish(null, target);
+    } catch (_) {
+      finish(null, target);
+    }
+  }
+
+  function nextAttempt() {
+    if (attempts.length) {
+      const key = attempts.shift();
+      if (!tryGet(key)) {
+        nextAttempt();
+      }
+      return;
+    }
+    scanAll();
+  }
+
+  const attempts = [];
+  if (Number.isFinite(target)) {
+    attempts.push(target, String(target));
+  }
+  if (typeof originalTime === 'string' && !attempts.includes(originalTime)) {
+    attempts.push(originalTime);
+    const parsed = Number(originalTime);
+    if (Number.isFinite(parsed) && !attempts.includes(parsed)) attempts.push(parsed);
+  }
+
+  nextAttempt();
 }
 
 function scheduleBackfill(delayMs = BACKFILL_INTERVAL_MS) {
@@ -461,7 +663,7 @@ function runBackfill() {
       scheduleBackfill(BACKFILL_INTERVAL_MS);
       return;
     }
-    const windowStart = Math.floor(start);
+    const windowStart = BACKFILL_STEP_SECS * Math.floor(Math.max(1, start) / BACKFILL_STEP_SECS);
     const windowEnd = windowStart + BACKFILL_WINDOW_SECS;
     const pendingSame = (backfillInFlight && backfillInFlight.payload && backfillInFlight.payload.start === windowStart) ||
       backfillQueue.some((item) => item.start === windowStart);
@@ -499,9 +701,18 @@ function findNextMissingOut() {
           return;
         }
         const record = cursor.value;
-        if (record && typeof record.time === 'number' && needsOutBackfill(record)) {
-          resolve(record.time);
-          return;
+        if (record && typeof record.time === 'number') {
+          const time = Number(record.time);
+          if (shouldSkipBackfillWindow(time)) {
+            cursor.continue();
+            return;
+          }
+          const reasons = dirtyReasons(record);
+          if (reasons.length) {
+            console.log('[KNMI] next dirty snapshot', new Date(record.time * 1000).toISOString(), 'reasons', reasons);
+            resolve(record.time);
+            return;
+          }
         }
         cursor.continue();
       };
@@ -526,16 +737,22 @@ function trySendBackfillQueue() {
       sentAt: Date.now(),
       timeout: setTimeout(() => {
         if (backfillInFlight && backfillInFlight.payload === payload) {
-          console.warn('[KNMI] backfill response timeout for window starting', payload.start);
+          const iso = Number.isFinite(payload.start) ? new Date(payload.start * 1000).toISOString() : payload.start;
+          console.log('[KNMI] backfill response timeout for window starting', iso);
           backfillInFlight = null;
-          backfillQueue.unshift(payload);
-          scheduleBackfill(BACKFILL_RETRY_MS);
+          const outcome = registerBackfillFailure(payload.start, 'timeout');
+          if (outcome.retry) {
+            backfillQueue.unshift(payload);
+          }
+          scheduleBackfill(outcome.retry ? BACKFILL_RETRY_MS : BACKFILL_INTERVAL_MS);
         }
       }, BACKFILL_RETRY_MS)
     };
-  } catch (_) {
+  } catch (err) {
+    registerBackfillFailure(payload.start, err && err.message ? err.message : 'ws_send_failed');
     backfillInFlight = null;
     backfillQueue.unshift(payload);
+    scheduleBackfill(BACKFILL_RETRY_MS);
   }
 }
 
@@ -549,68 +766,161 @@ function handleKnmiSeriesResponse(msg) {
     backfillInFlight = null;
   }
   if (!msg || msg.ok === false) {
-    if (inflight && inflight.payload) {
-      backfillQueue.unshift(inflight.payload);
+    const payload = inflight && inflight.payload;
+    let delay = BACKFILL_RETRY_MS;
+    if (payload && Number.isFinite(payload.start)) {
+      const res = registerBackfillFailure(payload.start, msg && msg.error ? msg.error : 'knmi_error');
+      delay = res.retry ? BACKFILL_RETRY_MS : BACKFILL_INTERVAL_MS;
     }
-    scheduleBackfill(BACKFILL_RETRY_MS);
+    scheduleBackfill(delay);
     return;
   }
   const samples = Array.isArray(msg.samples) ? msg.samples : [];
-  applyBackfillSamples(samples).then((updated) => {
+  const payload = inflight ? inflight.payload : null;
+  if (samples.length) {
+    const firstTs = Number(samples[0][0]);
+    const lastTs = Number(samples[samples.length - 1][0]);
+    console.log('[KNMI] samples window', samples.length, 'first', Number.isFinite(firstTs) ? new Date(firstTs * 1000).toISOString() : firstTs, 'last', Number.isFinite(lastTs) ? new Date(lastTs * 1000).toISOString() : lastTs);
+  } else {
+    console.log('[KNMI] samples window empty');
+  }
+  applyBackfillSamples(samples, payload).then((updated) => {
     if (samples.length) {
       console.log(`[KNMI] backfill applied ${updated}/${samples.length} samples`);
+    }
+    let delay = BACKFILL_INTERVAL_MS;
+    if (payload && Number.isFinite(payload.start)) {
+      if (updated > 0) {
+        clearBackfillState(payload.start);
+      } else {
+        const reason = samples.length === 0 ? 'no_samples' : 'no_updates';
+        const res = registerBackfillFailure(payload.start, reason);
+        delay = res.retry ? BACKFILL_RETRY_MS : BACKFILL_INTERVAL_MS;
+      }
     }
     if (updated > 0) {
       scheduleKnmiWindowCheck(0);
     }
-    const nextDelay = (updated === 0 && samples.length > 0 && backfillInFlight) ? BACKFILL_RETRY_MS : BACKFILL_INTERVAL_MS;
-    scheduleBackfill(nextDelay);
-  }).catch(() => scheduleBackfill(BACKFILL_RETRY_MS));
+    scheduleBackfill(delay);
+  }).catch((err) => {
+    if (payload && Number.isFinite(payload.start)) {
+      registerBackfillFailure(payload.start, err && err.message ? err.message : 'apply_failed');
+    }
+    scheduleBackfill(BACKFILL_RETRY_MS);
+  });
 }
 
-function applyBackfillSamples(samples) {
+function applyBackfillSamples(samples, payload) {
   return new Promise((resolve) => {
-    if (!dbReady || !db || !Array.isArray(samples) || samples.length === 0) {
+    if (!dbReady || !db) {
       resolve(0);
       return;
     }
+    const sampleList = [];
+    if (Array.isArray(samples)) {
+      for (const entry of samples) {
+        if (!Array.isArray(entry) || entry.length < 2) continue;
+        const time = Number(entry[0]);
+        const temp = Number(entry[1]);
+        if (!Number.isFinite(time) || !Number.isFinite(temp)) continue;
+        sampleList.push({ time: Math.round(time), temp });
+      }
+    }
+    sampleList.sort((a, b) => a.time - b.time);
+    if (!sampleList.length) {
+      resolve(0);
+      return;
+    }
+    const windowStart = payload && Number.isFinite(payload.start)
+      ? Math.max(1, BACKFILL_STEP_SECS * Math.floor(Number(payload.start) / BACKFILL_STEP_SECS))
+      : null;
+    const windowEnd = windowStart !== null ? windowStart + BACKFILL_WINDOW_SECS : null;
+
+    function estimateTemp(targetTime) {
+      if (!Number.isFinite(targetTime) || !sampleList.length) return null;
+      const t = Math.round(targetTime);
+      let lo = 0;
+      let hi = sampleList.length - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const midTime = sampleList[mid].time;
+        if (midTime === t) {
+          return sampleList[mid].temp;
+        }
+        if (midTime < t) lo = mid + 1;
+        else hi = mid - 1;
+      }
+      const prev = hi >= 0 ? sampleList[hi] : null;
+      const next = lo < sampleList.length ? sampleList[lo] : null;
+      if (prev && next) {
+        if (next.time === prev.time) return prev.temp;
+        const ratio = (t - prev.time) / (next.time - prev.time);
+        return prev.temp + (next.temp - prev.temp) * ratio;
+      }
+      if (prev) return prev.temp;
+      if (next) return next.temp;
+      return null;
+    }
+
     let updated = 0;
     try {
       const tx = db.transaction(DB_STORE_NAME, 'readwrite');
       const store = tx.objectStore(DB_STORE_NAME);
+      const range = (Number.isFinite(windowStart) && Number.isFinite(windowEnd) && windowEnd >= windowStart)
+        ? IDBKeyRange.bound(windowStart, windowEnd)
+        : null;
+      const cursorReq = range ? store.openCursor(range) : store.openCursor();
+      cursorReq.onsuccess = (ev) => {
+        const cursor = ev.target.result;
+        if (!cursor) return;
+        const record = cursor.value;
+        if (!record || typeof record.time !== 'number') {
+          cursor.continue();
+          return;
+        }
+        const reasons = dirtyReasons(record);
+        if (!reasons.length) {
+          cursor.continue();
+          return;
+        }
+        const temp = estimateTemp(record.time);
+        const iso = new Date(record.time * 1000).toISOString();
+        if (!Number.isFinite(temp)) {
+          console.log('[KNMI] no temperature available for snapshot', iso, '– keeping dirty');
+          cursor.continue();
+          return;
+        }
+        console.log('[KNMI] updating snapshot', iso, 'dirtyReasons', reasons, 'newTemp', temp);
+        if (knmiDryRun) {
+          cursor.continue();
+          return;
+        }
+        let modified = false;
+        if (record.schedule) { delete record.schedule; modified = true; }
+        if (record.config) { delete record.config; modified = true; }
+        if ('pf' in record) { delete record.pf; modified = true; }
+        if (record.out !== temp) {
+          record.out = temp;
+          modified = true;
+        }
+        if (!modified) {
+          cursor.continue();
+          return;
+        }
+        const updateReq = cursor.update(record);
+        updateReq.onsuccess = () => {
+          updated++;
+          cursor.continue();
+        };
+        updateReq.onerror = () => {
+          console.log('[KNMI] failed to update snapshot', iso);
+          cursor.continue();
+        };
+      };
+      cursorReq.onerror = () => resolve(updated);
       tx.oncomplete = () => resolve(updated);
       tx.onabort = () => resolve(updated);
       tx.onerror = () => resolve(updated);
-      let index = 0;
-      function processNext() {
-        if (index >= samples.length) {
-          return;
-        }
-        const entry = samples[index++];
-        if (!Array.isArray(entry) || entry.length < 2) {
-          processNext();
-          return;
-        }
-        const time = Number(entry[0]);
-        const temp = Number(entry[1]);
-        if (!Number.isFinite(time) || !Number.isFinite(temp)) {
-          processNext();
-          return;
-        }
-        const getReq = store.get(time);
-        getReq.onsuccess = () => {
-          const record = getReq.result;
-          if (record && needsOutBackfill(record)) {
-            const original = record.out;
-            console.log('[KNMI] would update snapshot', new Date(time * 1000).toISOString(), 'out from', original, 'to', temp);
-            processNext();
-          } else {
-            processNext();
-          }
-        };
-        getReq.onerror = () => processNext();
-      }
-      processNext();
     } catch (_) {
       resolve(updated);
     }
@@ -818,6 +1128,7 @@ function averageRecords(buf, mid){
     bot: meanOf(buf, d=>d.bot, m.bot),
     chip: meanOf(buf, d=>d.chip, m.chip),
     rem: meanOf(buf, d=>d.rem, m.rem),
+    out: meanOf(buf, d=>d.out, m.out),
     voltage: meanOf(buf, d=>d.voltage, m.voltage),
     current: meanOf(buf, d=>d.current, m.current),
     power: meanOf(buf, d=>d.power, m.power),
