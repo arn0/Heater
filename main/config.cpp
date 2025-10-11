@@ -5,7 +5,7 @@
 #include "esp_log.h"
 #include "ArduinoJson.h"
 
-static const char *TAG = "heater_config";
+static const char *TAG = "config";
 static const char *CONFIG_PATH = "/data/config.json";
 
 static const heater_config_t kDefaultConfig = {

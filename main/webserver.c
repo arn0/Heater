@@ -5,13 +5,16 @@
 #include <sys/unistd.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <ctype.h>
+#include <stdint.h>
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
-//#include "spi_flash_mmap.h"
+// #include "spi_flash_mmap.h"
 #include <sys/stat.h>
 #include <esp_http_server.h>
 #include "nvs_flash.h"
@@ -31,6 +34,20 @@
 
 static const char *TAG = "webserver";
 int led_state = 0;
+
+static bool json_get_string( const char *json, const char *key, char *out, size_t out_len );
+static bool json_get_int64( const char *json, const char *key, int64_t *out );
+static esp_err_t handle_knmi_series_request( httpd_req_t *req, const char *payload );
+
+typedef struct {
+	httpd_handle_t handle;
+	int sockfd;
+	int64_t start;
+	int64_t end;
+	char request_id[64];
+} knmi_series_job_t;
+
+static void knmi_series_task(void *arg);
 
 /* Max length a file path can have on storage */ // FIXME: remove CONFIG_, get acurate file name length
 #define CONFIG_SPIFFS_OBJ_NAME_LEN 32
@@ -76,7 +93,7 @@ static char readBuf[readBufSize];
 static size_t read_spiff_buffer( const char *file_name ) {
 	size_t readSize = 0;
 	FILE *f = fopen( file_name, "r" );
-	if ( f == NULL ) {
+	if (f == NULL) {
 		ESP_LOGE( TAG, "Failed to open file for reading" );
 		return 0;
 	}
@@ -86,7 +103,7 @@ static size_t read_spiff_buffer( const char *file_name ) {
 
 	// Fail if file is larger than memory buffer, as we don't
 	// have code to split across multiple read operations.
-	if ( readSize >= readBufSize ) {
+	if (readSize >= readBufSize) {
 		ESP_LOGE( TAG, "File size exceeds memory buffer" );
 		ESP_ERROR_CHECK( ESP_FAIL );
 	} else {
@@ -116,65 +133,64 @@ static struct websock_instance websock_clients[MAX_WEBSOCK_CLIENTS];
  */
 
 static void socket_close_cleanup( struct websock_instance *context ) {
-    if ( context && context->handle ) {
-        httpd_ws_client_info_t st = httpd_ws_get_fd_info( context->handle, context->descriptor );
-        switch ( st ) {
-        case HTTPD_WS_CLIENT_INVALID:
-            ESP_LOGI( TAG, "Lost our client handler. Reason: INVALID" );
-            /* fallthrough: treat as real close and clear slot */
-            context->handle = NULL;
-            context->descriptor = 0;
-            return;
-        case HTTPD_WS_CLIENT_HTTP:
-            ESP_LOGI( TAG, "Lost our client handler. Reason: HTTP (not WS)" );
-            /* This callback fires at the end of the HTTP handshake. Do NOT clear slot here. */
-            return;
-        case HTTPD_WS_CLIENT_WEBSOCKET:
-            ESP_LOGI( TAG, "Lost our client handler. Reason: WEBSOCKET (peer close)" );
-            context->handle = NULL;
-            context->descriptor = 0;
-            return;
-        default:
-            ESP_LOGI( TAG, "Lost our client handler." );
-            return;
-        }
-    } else {
-        ESP_LOGI( TAG, "Lost our client handler." );
-    }
+	if (context && context->handle) {
+		httpd_ws_client_info_t st = httpd_ws_get_fd_info( context->handle, context->descriptor );
+		switch (st) {
+		case HTTPD_WS_CLIENT_INVALID:
+			ESP_LOGI( TAG, "Lost our client handler. Reason: INVALID" );
+			/* fallthrough: treat as real close and clear slot */
+			context->handle = NULL;
+			context->descriptor = 0;
+			return;
+		case HTTPD_WS_CLIENT_HTTP:
+			ESP_LOGI( TAG, "Lost our client handler. Reason: HTTP (not WS)" );
+			/* This callback fires at the end of the HTTP handshake. Do NOT clear slot here. */
+			return;
+		case HTTPD_WS_CLIENT_WEBSOCKET:
+			ESP_LOGI( TAG, "Lost our client handler. Reason: WEBSOCKET (peer close)" );
+			context->handle = NULL;
+			context->descriptor = 0;
+			return;
+		default:
+			ESP_LOGI( TAG, "Lost our client handler." );
+			return;
+		}
+	} else {
+		ESP_LOGI( TAG, "Lost our client handler." );
+	}
 }
 
 static void websocket_close_free_ctx( void *ctx ) {
-    if ( ctx ) {
-        socket_close_cleanup( (struct websock_instance *)ctx );
-    }
+	if (ctx) {
+		socket_close_cleanup( (struct websock_instance *)ctx );
+	}
 }
 
 esp_err_t send_sensor_update_frame( char *buffer, size_t client ) {
-	if ( client >= MAX_WEBSOCK_CLIENTS ) {
+	if (client >= MAX_WEBSOCK_CLIENTS) {
 		return ESP_ERR_INVALID_ARG;
 	}
-	if ( websock_clients[client].handle == NULL ) {
+	if (websock_clients[client].handle == NULL) {
 		return ESP_ERR_INVALID_STATE;
 	}
 
 	/* Verify that the FD is still a WS client before sending */
 	httpd_ws_client_info_t st = httpd_ws_get_fd_info( websock_clients[client].handle, websock_clients[client].descriptor );
-	if ( st != HTTPD_WS_CLIENT_WEBSOCKET ) {
+	if (st != HTTPD_WS_CLIENT_WEBSOCKET) {
 		ESP_LOGW( TAG, "WS client %d not in WEBSOCKET state (%d) — cleaning up", (int)websock_clients[client].descriptor, (int)st );
 		socket_close_cleanup( &websock_clients[client] );
 		return ESP_ERR_INVALID_STATE;
 	}
 
 	httpd_ws_frame_t ws_frame = {
-		.final = true,
-		.fragmented = false,
-		.type = HTTPD_WS_TYPE_TEXT,
-		.payload = (uint8_t *)buffer,
-		.len = strlen( buffer )
-	};
+		 .final = true,
+		 .fragmented = false,
+		 .type = HTTPD_WS_TYPE_TEXT,
+		 .payload = (uint8_t *)buffer,
+		 .len = strlen( buffer ) };
 
 	esp_err_t err = httpd_ws_send_frame_async( websock_clients[client].handle, websock_clients[client].descriptor, &ws_frame );
-	if ( err != ESP_OK ) {
+	if (err != ESP_OK) {
 		ESP_LOGW( TAG, "httpd_ws_send_frame_async failed for fd %d: %s", (int)websock_clients[client].descriptor, esp_err_to_name( err ) );
 		/* Drop this client slot so we stop sending to dead sockets */
 		socket_close_cleanup( &websock_clients[client] );
@@ -183,10 +199,199 @@ esp_err_t send_sensor_update_frame( char *buffer, size_t client ) {
 	return ESP_OK;
 }
 
+static bool json_get_string( const char *json, const char *key, char *out, size_t out_len ) {
+	if (!json || !key || !out || out_len == 0) {
+		return false;
+	}
+	char pattern[64];
+	int written = snprintf( pattern, sizeof( pattern ), "\"%s\"", key );
+	if (written <= 0 || written >= (int)sizeof( pattern )) {
+		return false;
+	}
+	const char *pos = strstr( json, pattern );
+	if (!pos) {
+		return false;
+	}
+	pos += written;
+	while (*pos && isspace( (unsigned char)*pos )) {
+		++pos;
+	}
+	if (*pos != ':') {
+		return false;
+	}
+	++pos;
+	while (*pos && isspace( (unsigned char)*pos )) {
+		++pos;
+	}
+	if (*pos != '"') {
+		return false;
+	}
+	++pos;
+	const char *end = pos;
+	while (*end && *end != '"') {
+		if (*end == '\\' && end[1]) {
+			end += 2;
+			continue;
+		}
+		++end;
+	}
+	if (!*end) {
+		return false;
+	}
+	size_t copy = end - pos;
+	if (copy >= out_len) {
+		copy = out_len - 1;
+	}
+	memcpy( out, pos, copy );
+	out[copy] = '\0';
+	return true;
+}
+
+static bool json_get_int64( const char *json, const char *key, int64_t *out ) {
+	if (!json || !key || !out) {
+		return false;
+	}
+	char pattern[64];
+	int written = snprintf( pattern, sizeof( pattern ), "\"%s\"", key );
+	if (written <= 0 || written >= (int)sizeof( pattern )) {
+		return false;
+	}
+	const char *pos = strstr( json, pattern );
+	if (!pos) {
+		return false;
+	}
+	pos += written;
+	while (*pos && isspace( (unsigned char)*pos )) {
+		++pos;
+	}
+	if (*pos != ':') {
+		return false;
+	}
+	++pos;
+	while (*pos && isspace( (unsigned char)*pos )) {
+		++pos;
+	}
+	char *endptr = NULL;
+	long long value = strtoll( pos, &endptr, 10 );
+	if (pos == endptr) {
+		return false;
+	}
+	*out = value;
+	return true;
+}
+
+static esp_err_t handle_knmi_series_request( httpd_req_t *req, const char *payload ) {
+	int64_t start_s = 0;
+	int64_t end_s = 0;
+	char request_id[64] = { 0 };
+	if (!json_get_int64( payload, "start", &start_s ) || !json_get_int64( payload, "end", &end_s )) {
+		ESP_LOGW( TAG, "KNMI series request missing start/end" );
+		return ESP_ERR_INVALID_ARG;
+	}
+	if (!json_get_string( payload, "request_id", request_id, sizeof( request_id ) )) {
+		request_id[0] = '\0';
+	}
+	if (end_s < start_s) {
+		int64_t tmp = start_s;
+		start_s = end_s;
+		end_s = tmp;
+	}
+    knmi_series_job_t *job = (knmi_series_job_t *)malloc(sizeof(knmi_series_job_t));
+    if (!job) {
+        ESP_LOGE(TAG, "Failed to allocate knmi series job");
+        return ESP_ERR_NO_MEM;
+    }
+    job->handle = req->handle;
+    job->sockfd = httpd_req_to_sockfd(req);
+    job->start = start_s;
+    job->end = end_s;
+    strlcpy(job->request_id, request_id, sizeof(job->request_id));
+    ESP_LOGI(TAG, "KNMI series request start=%lld end=%lld", (long long)start_s, (long long)end_s);
+    BaseType_t created = xTaskCreatePinnedToCore(knmi_series_task, "knmi_series", 8192, job, tskIDLE_PRIORITY + 1, NULL, 0);
+    if (created != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create knmi series task");
+        free(job);
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+static void knmi_series_task(void *arg) {
+    knmi_series_job_t *job = (knmi_series_job_t *)arg;
+    if (!job) {
+        vTaskDelete(NULL);
+        return;
+    }
+        knmi_series_t series = {0};
+        esp_err_t err = knmi_fetch_series((time_t)job->start, (time_t)job->end, &series);
+        const size_t sample_count = series.count;
+        ESP_LOGI(TAG, "KNMI series fetched %u samples", (unsigned)sample_count);
+        const size_t base = 160 + (job->request_id[0] ? strlen(job->request_id) + 16 : 0);
+        size_t capacity = base + sample_count * 48;
+        char *resp = (char *)malloc(capacity);
+        if (!resp) {
+            ESP_LOGE(TAG, "Failed to allocate KNMI response buffer");
+            knmi_series_free(&series);
+            free(job);
+            vTaskDelete(NULL);
+            return;
+        }
+        int offset = snprintf(resp, capacity,
+            "{\"type\":\"knmi_series\",\"ok\":%s,\"start\":%lld,\"end\":%lld",
+            (err == ESP_OK) ? "true" : "false",
+            (long long)job->start,
+            (long long)job->end);
+        if (job->request_id[0] && offset > 0) {
+            offset += snprintf(resp + offset, capacity - offset, ",\"request_id\":\"%s\"", job->request_id);
+        }
+        if (offset < 0) offset = 0;
+        if ((size_t)offset >= capacity) offset = (int)(capacity - 1);
+        if (err == ESP_OK && sample_count > 0) {
+            offset += snprintf(resp + offset, capacity - offset, ",\"samples\":[");
+            for (size_t i = 0; i < sample_count && (size_t)offset < capacity; ++i) {
+                offset += snprintf(resp + offset, capacity - offset, "%s[%lld,%.3f]",
+                    i == 0 ? "" : ",",
+                    (long long)series.samples[i].timestamp,
+                    (double)series.samples[i].temperature);
+            }
+            offset += snprintf(resp + offset, capacity - offset, "]");
+        } else {
+            offset += snprintf(resp + offset, capacity - offset, ",\"samples\":[]");
+        }
+        if (err != ESP_OK) {
+            offset += snprintf(resp + offset, capacity - offset, ",\"error\":\"%s\"", esp_err_to_name(err));
+        }
+        if (offset < 0) offset = 0;
+        if ((size_t)offset > capacity - 2) {
+            offset = (capacity > 2) ? (int)(capacity - 2) : 0;
+        }
+        int tail = snprintf(resp + offset, capacity - offset, "}");
+        if (tail < 0 || (size_t)tail >= capacity - offset) {
+            resp[capacity - 1] = '\0';
+        }
+
+        knmi_series_free(&series);
+
+        httpd_ws_frame_t ws_frame = {
+            .final = true,
+            .fragmented = false,
+            .type = HTTPD_WS_TYPE_TEXT,
+            .payload = (uint8_t *)resp,
+            .len = strlen(resp) };
+        esp_err_t send_err = httpd_ws_send_frame_async(job->handle, job->sockfd, &ws_frame);
+        if (send_err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to send KNMI series response: %s", esp_err_to_name(send_err));
+        }
+
+        free(resp);
+        free(job);
+        vTaskDelete(NULL);
+}
+
 int16_t do_checksum( int8_t *buffer, size_t size ) {
 	int16_t sum = 0;
 
-	for ( size_t i = 0; i < size; i++ ) {
+	for (size_t i = 0; i < size; i++) {
 		sum += buffer[i];
 	}
 	return ( sum );
@@ -208,12 +413,12 @@ static void apply_override_delta( float delta ) {
 	const heater_config_t *cfg = heater_config_get();
 	float base = heater_status.override_active ? heater_status.override_target : heater_status.schedule_target;
 	base += delta;
-	if ( cfg ) {
-		if ( base < cfg->floor_temperature ) {
+	if (cfg) {
+		if (base < cfg->floor_temperature) {
 			base = cfg->floor_temperature;
 		}
 		float upper = cfg->day_temperature + 5.0f;
-		if ( base > upper ) {
+		if (base > upper) {
 			base = upper;
 		}
 	}
@@ -221,7 +426,7 @@ static void apply_override_delta( float delta ) {
 	heater_status.override_active = true;
 	heater_status.target = base;
 	heater_status.update = true;
-	if ( heater_status.minutes_to_next_transition < 0 ) {
+	if (heater_status.minutes_to_next_transition < 0) {
 		heater_status.minutes_to_next_transition = 0;
 	}
 	extend_override_window();
@@ -255,22 +460,22 @@ void send_sensor_update() {
 		// Wait for the next cycle.
 		xWasDelayed = xTaskDelayUntil( &xPreviousWakeTime, xTimeIncrement );
 
-		if ( xWasDelayed == pdFALSE ) {
+		if (xWasDelayed == pdFALSE) {
 			ESP_LOGE( TAG, "Task ran out of time" );
 		}
-		if ( websock_clients[0].handle != NULL || websock_clients[1].handle != NULL || websock_clients[2].handle != NULL || websock_clients[3].handle != NULL ) {
+		if (websock_clients[0].handle != NULL || websock_clients[1].handle != NULL || websock_clients[2].handle != NULL || websock_clients[3].handle != NULL) {
 
 			time( &now );
-			if ( now > next_log_time ) { // Max 1 packet per second
+			if (now > next_log_time) { // Max 1 packet per second
 				next_log_time = now + 1;
 				checksum = do_checksum( (int8_t *)&heater_status, sizeof( heater_status ) ); // Check if status has changed
 
-				if ( checksum_last != checksum ) {
+				if (checksum_last != checksum) {
 					checksum_last = checksum;
 					json_string = json_update();
 
-					for ( size_t i = 0; i < MAX_WEBSOCK_CLIENTS; i++ ) {
-						if ( websock_clients[i].handle != NULL ) {
+					for (size_t i = 0; i < MAX_WEBSOCK_CLIENTS; i++) {
+						if (websock_clients[i].handle != NULL) {
 							ESP_LOGD( TAG, "json_str: %s, length: %d", json_string, strlen( json_string ) );
 							send_sensor_update_frame( json_string, i );
 						}
@@ -278,7 +483,7 @@ void send_sensor_update() {
 				}
 			}
 		}
-	} while ( true );
+	} while (true);
 }
 
 /*
@@ -287,61 +492,63 @@ void send_sensor_update() {
 
 static esp_err_t get_ws_handler( httpd_req_t *req ) {
 	size_t i;
+	const char *json_str;
+	char type_buf[32] = { 0 };
 
-    if ( req->method == HTTP_GET ) {
-        ESP_LOGI( TAG, "Handshake done, the new connection was opened" );
+	if (req->method == HTTP_GET) {
+		ESP_LOGI( TAG, "Handshake done, the new connection was opened" );
 
-        /* Diagnose missing/invalid WS headers */
-        char hbuf[96];
-        size_t hlen;
-        hlen = httpd_req_get_hdr_value_len( req, "Upgrade" );
-        if ( hlen > 0 && hlen < sizeof( hbuf ) ) {
-            httpd_req_get_hdr_value_str( req, "Upgrade", hbuf, sizeof( hbuf ) );
-            ESP_LOGI( TAG, "WS header Upgrade: %s", hbuf );
-        } else {
-            ESP_LOGW( TAG, "WS header Upgrade missing or too long (%u)", (unsigned)hlen );
-        }
-        hlen = httpd_req_get_hdr_value_len( req, "Connection" );
-        if ( hlen > 0 && hlen < sizeof( hbuf ) ) {
-            httpd_req_get_hdr_value_str( req, "Connection", hbuf, sizeof( hbuf ) );
-            ESP_LOGI( TAG, "WS header Connection: %s", hbuf );
-        } else {
-            ESP_LOGW( TAG, "WS header Connection missing or too long (%u)", (unsigned)hlen );
-        }
-        hlen = httpd_req_get_hdr_value_len( req, "Sec-WebSocket-Key" );
-        if ( hlen > 0 && hlen < sizeof( hbuf ) ) {
-            httpd_req_get_hdr_value_str( req, "Sec-WebSocket-Key", hbuf, sizeof( hbuf ) );
-            ESP_LOGI( TAG, "WS header Sec-WebSocket-Key: %s", hbuf );
-        } else {
-            ESP_LOGW( TAG, "WS header Sec-WebSocket-Key missing or too long (%u)", (unsigned)hlen );
-        }
-        hlen = httpd_req_get_hdr_value_len( req, "Sec-WebSocket-Version" );
-        if ( hlen > 0 && hlen < sizeof( hbuf ) ) {
-            httpd_req_get_hdr_value_str( req, "Sec-WebSocket-Version", hbuf, sizeof( hbuf ) );
-            ESP_LOGI( TAG, "WS header Sec-WebSocket-Version: %s", hbuf );
-        } else {
-            ESP_LOGW( TAG, "WS header Sec-WebSocket-Version missing or too long (%u)", (unsigned)hlen );
-        }
+		/* Diagnose missing/invalid WS headers */
+		char hbuf[96];
+		size_t hlen;
+		hlen = httpd_req_get_hdr_value_len( req, "Upgrade" );
+		if (hlen > 0 && hlen < sizeof( hbuf )) {
+			httpd_req_get_hdr_value_str( req, "Upgrade", hbuf, sizeof( hbuf ) );
+			ESP_LOGI( TAG, "WS header Upgrade: %s", hbuf );
+		} else {
+			ESP_LOGW( TAG, "WS header Upgrade missing or too long (%u)", (unsigned)hlen );
+		}
+		hlen = httpd_req_get_hdr_value_len( req, "Connection" );
+		if (hlen > 0 && hlen < sizeof( hbuf )) {
+			httpd_req_get_hdr_value_str( req, "Connection", hbuf, sizeof( hbuf ) );
+			ESP_LOGI( TAG, "WS header Connection: %s", hbuf );
+		} else {
+			ESP_LOGW( TAG, "WS header Connection missing or too long (%u)", (unsigned)hlen );
+		}
+		hlen = httpd_req_get_hdr_value_len( req, "Sec-WebSocket-Key" );
+		if (hlen > 0 && hlen < sizeof( hbuf )) {
+			httpd_req_get_hdr_value_str( req, "Sec-WebSocket-Key", hbuf, sizeof( hbuf ) );
+			ESP_LOGI( TAG, "WS header Sec-WebSocket-Key: %s", hbuf );
+		} else {
+			ESP_LOGW( TAG, "WS header Sec-WebSocket-Key missing or too long (%u)", (unsigned)hlen );
+		}
+		hlen = httpd_req_get_hdr_value_len( req, "Sec-WebSocket-Version" );
+		if (hlen > 0 && hlen < sizeof( hbuf )) {
+			httpd_req_get_hdr_value_str( req, "Sec-WebSocket-Version", hbuf, sizeof( hbuf ) );
+			ESP_LOGI( TAG, "WS header Sec-WebSocket-Version: %s", hbuf );
+		} else {
+			ESP_LOGW( TAG, "WS header Sec-WebSocket-Version missing or too long (%u)", (unsigned)hlen );
+		}
 
-		for ( i = 0; i < MAX_WEBSOCK_CLIENTS; i++ ) {
-			if ( websock_clients[i].handle == req->handle && websock_clients[i].descriptor == httpd_req_to_sockfd( req ) ) { // client already connected
+		for (i = 0; i < MAX_WEBSOCK_CLIENTS; i++) {
+			if (websock_clients[i].handle == req->handle && websock_clients[i].descriptor == httpd_req_to_sockfd( req )) { // client already connected
 				return ESP_OK;
 			}
 		}
 
-        /* Keep existing slots; rely on server to close stale sockets */
+		/* Keep existing slots; rely on server to close stale sockets */
 
-        for ( i = 0; i < MAX_WEBSOCK_CLIENTS; i++ ) {
-            if ( websock_clients[i].handle == NULL ) {
-                ESP_LOGI( TAG, "Have a new client, %d now", i + 1 );
-                websock_clients[i].handle = req->handle;
-                websock_clients[i].descriptor = httpd_req_to_sockfd( req );
-                req->sess_ctx = (void *)&websock_clients[i];
-                req->free_ctx = websocket_close_free_ctx;
-                next_log_time = 0; // send update immediately
-                return ESP_OK;
-            }
-        }
+		for (i = 0; i < MAX_WEBSOCK_CLIENTS; i++) {
+			if (websock_clients[i].handle == NULL) {
+				ESP_LOGI( TAG, "Have a new client, %d now", i + 1 );
+				websock_clients[i].handle = req->handle;
+				websock_clients[i].descriptor = httpd_req_to_sockfd( req );
+				req->sess_ctx = (void *)&websock_clients[i];
+				req->free_ctx = websocket_close_free_ctx;
+				next_log_time = 0; // send update immediately
+				return ESP_OK;
+			}
+		}
 		ESP_LOGW( TAG, "Already have %d clients, accepting without tracking", MAX_WEBSOCK_CLIENTS );
 		return ESP_OK;
 	}
@@ -349,87 +556,105 @@ static esp_err_t get_ws_handler( httpd_req_t *req ) {
 	httpd_ws_frame_t ws_pkt;
 	uint8_t *buf = NULL;
 	esp_err_t handler_ret = ESP_OK;
-    memset( &ws_pkt, 0, sizeof( httpd_ws_frame_t ) );
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+	memset( &ws_pkt, 0, sizeof( httpd_ws_frame_t ) );
+	ws_pkt.type = HTTPD_WS_TYPE_TEXT;
 	/* Set max_len = 0 to get the frame len */
 	esp_err_t ret = httpd_ws_recv_frame( req, &ws_pkt, 0 );
 
-	if ( ret != ESP_OK ) {
+	if (ret != ESP_OK) {
 		ESP_LOGE( TAG, "httpd_ws_recv_frame failed to get frame len with %d", ret );
 		return ret;
 	}
-	ESP_LOGV(TAG, "frame len is %d", ws_pkt.len);
-	if ( ws_pkt.len ) {
+	ESP_LOGV( TAG, "frame len is %d", ws_pkt.len );
+	if (ws_pkt.len) {
 		/* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
 		buf = calloc( 1, ws_pkt.len + 1 );
-		if ( buf == NULL ) {
+		if (buf == NULL) {
 			ESP_LOGE( TAG, "Failed to calloc memory for buf" );
 			return ESP_ERR_NO_MEM;
 		}
 		ws_pkt.payload = buf;
 		/* Set max_len = ws_pkt.len to get the frame payload */
 		ret = httpd_ws_recv_frame( req, &ws_pkt, ws_pkt.len );
-		if ( ret != ESP_OK ) {
+		if (ret != ESP_OK) {
 			ESP_LOGE( TAG, "httpd_ws_recv_frame failed with %d", ret );
 			handler_ret = ret;
 			goto cleanup;
 		}
-    /* Handle WebSocket control frames */
-    if ( ws_pkt.type == HTTPD_WS_TYPE_PING ) {
-        ws_pkt.type = HTTPD_WS_TYPE_PONG;
-        (void)httpd_ws_send_frame( req, &ws_pkt );
-        goto cleanup;
-    }
-    if ( ws_pkt.type == HTTPD_WS_TYPE_CLOSE ) {
-        goto cleanup;
-    }
+		/* Handle WebSocket control frames */
+		if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
+			ws_pkt.type = HTTPD_WS_TYPE_PONG;
+			(void)httpd_ws_send_frame( req, &ws_pkt );
+			goto cleanup;
+		}
+		if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
+			goto cleanup;
+		}
 
-    ESP_LOGV( TAG, "Got packet with message: %s", ws_pkt.payload ? (char*)ws_pkt.payload : "<null>" );
-		if ( ws_pkt.payload[0] == '{' ) {
-			handler_ret = heater_config_apply_json( (const char *)ws_pkt.payload );
-			if ( handler_ret != ESP_OK ) {
-				ESP_LOGW( TAG, "Failed to apply config update: %s", esp_err_to_name( handler_ret ) );
-			} else {
-				next_log_time = 0;
-			}
-			esp_err_t knmi_ret = knmi_handle_ws_command( (const char *)ws_pkt.payload );
-			if ( knmi_ret != ESP_OK && knmi_ret != ESP_ERR_INVALID_ARG ) {
-				ESP_LOGW( TAG, "Failed to handle KNMI command: %s", esp_err_to_name( knmi_ret ) );
-			}
-		} else {
-			switch ( ws_pkt.payload[0] ) {
-			case 'D':
-				apply_override_delta( -HEATER_WEB_STEP );
-				break;
+		ESP_LOGV( TAG, "Got packet with message: %s", ws_pkt.payload ? (char *)ws_pkt.payload : "<null>" );
 
-			case 'E':
-				apply_override_delta( -HEATER_WEB_STEP * 10 );
-				break;
+		switch (ws_pkt.payload[0]) {
+		case 'D':
+			apply_override_delta( -HEATER_WEB_STEP );
+			break;
 
-			case 'U':
-				apply_override_delta( HEATER_WEB_STEP );
-				break;
+		case 'E':
+			apply_override_delta( -HEATER_WEB_STEP * 10 );
+			break;
 
-			case 'V':
-				apply_override_delta( HEATER_WEB_STEP * 10 );
-				break;
+		case 'U':
+			apply_override_delta( HEATER_WEB_STEP );
+			break;
 
-			case 'R':
-				clear_override();
-				break;
+		case 'V':
+			apply_override_delta( HEATER_WEB_STEP * 10 );
+			break;
 
-			case 'S':
+		case 'R':
+			clear_override();
+			break;
+
+		case 'S':
 #ifdef ENABLE_LOG
-				if ( strcmp( (char *)ws_pkt.payload, "SavePoints" ) == 0 ) {
-					stats_save();
-				}
-#endif
-				break;
-
-			default:
-				ESP_LOGW( TAG, "Unhandled websocket command: %c", ws_pkt.payload[0] );
-				break;
+			if (strcmp( (char *)ws_pkt.payload, "SavePoints" ) == 0) {
+				stats_save();
 			}
+#endif
+			break;
+
+		case '{':
+			json_str = (const char *)ws_pkt.payload;
+			ESP_LOGI( TAG, "json_str: %s", json_str );
+			if (json_get_string( json_str, "type", type_buf, sizeof( type_buf ) ) ) {
+				if (strcmp( type_buf, "schedule" ) == 0) {
+					ESP_LOGW( TAG, "schedule found." );
+					handler_ret = heater_config_apply_json( json_str );
+					if (handler_ret != ESP_OK) {
+						ESP_LOGW( TAG, "Failed to apply config update: %s", esp_err_to_name( handler_ret ) );
+					} else {
+						next_log_time = 0;
+					}
+				} else if (strcmp( type_buf, "knmi" ) == 0) {
+					ESP_LOGW( TAG, "knmi found." );
+					//esp_err_t knmi_ret = knmi_handle_ws_command( json_str );
+					//if (knmi_ret != ESP_OK && knmi_ret != ESP_ERR_INVALID_ARG) {
+						//ESP_LOGW( TAG, "Failed to handle KNMI command: %s", esp_err_to_name( knmi_ret ) );
+					//}
+				} else if (strcmp( type_buf, "knmi_series" ) == 0) {
+					ESP_LOGW( TAG, "knmi_series found." );
+					handler_ret = handle_knmi_series_request( req, json_str );
+				} else {
+					ESP_LOGW( TAG, "No match found." );
+				}
+			} else {
+				ESP_LOGW( TAG, "No type in json found." );
+			}
+
+			break;
+
+		default:
+			ESP_LOGW( TAG, "Unhandled websocket command: %c", ws_pkt.payload[0] );
+			break;
 		}
 	}
 
@@ -443,12 +668,12 @@ cleanup:
  */
 
 esp_err_t get_index_handler( httpd_req_t *req ) {
-    size_t readSize = 0;
-    // ESP_ERROR_CHECK(httpd_resp_set_hdr(req, "cache-control", "max-age=1")); // For development
-    ESP_ERROR_CHECK( httpd_resp_set_type( req, "text/html" ) );
-    readSize = read_spiff_buffer( "/data/index.html" );
-    ESP_ERROR_CHECK( httpd_resp_send( req, readBuf, readSize ) );
-    return ESP_OK;
+	size_t readSize = 0;
+	// ESP_ERROR_CHECK(httpd_resp_set_hdr(req, "cache-control", "max-age=1")); // For development
+	ESP_ERROR_CHECK( httpd_resp_set_type( req, "text/html" ) );
+	readSize = read_spiff_buffer( "/data/index.html" );
+	ESP_ERROR_CHECK( httpd_resp_send( req, readBuf, readSize ) );
+	return ESP_OK;
 }
 
 #define IS_FILE_EXT( filename, ext ) \
@@ -456,19 +681,19 @@ esp_err_t get_index_handler( httpd_req_t *req ) {
 
 /* Set HTTP response content type according to file extension */
 static esp_err_t set_content_type_from_file( httpd_req_t *req, const char *filename ) {
-	if ( IS_FILE_EXT( filename, ".html" ) ) {
+	if (IS_FILE_EXT( filename, ".html" )) {
 		return httpd_resp_set_type( req, "text/html" );
-	} else if ( IS_FILE_EXT( filename, ".css" ) ) {
+	} else if (IS_FILE_EXT( filename, ".css" )) {
 		return httpd_resp_set_type( req, "text/css" );
-	} else if ( IS_FILE_EXT( filename, ".js" ) ) {
+	} else if (IS_FILE_EXT( filename, ".js" )) {
 		return httpd_resp_set_type( req, "application/x-javascript" );
-	} else if ( IS_FILE_EXT( filename, ".json" ) ) {
+	} else if (IS_FILE_EXT( filename, ".json" )) {
 		return httpd_resp_set_type( req, "application/json" );
-	} else if ( IS_FILE_EXT( filename, ".jpeg" ) ) {
+	} else if (IS_FILE_EXT( filename, ".jpeg" )) {
 		return httpd_resp_set_type( req, "image/jpeg" );
-	} else if ( IS_FILE_EXT( filename, ".svg" ) ) {
+	} else if (IS_FILE_EXT( filename, ".svg" )) {
 		return httpd_resp_set_type( req, "image/svg+xml" );
-	} else if ( IS_FILE_EXT( filename, ".ico" ) ) {
+	} else if (IS_FILE_EXT( filename, ".ico" )) {
 		return httpd_resp_set_type( req, "image/x-icon" );
 	}
 	/* This is a limited set only */
@@ -483,15 +708,15 @@ static const char *get_path_from_uri( char *dest, const char *base_path, const c
 	size_t pathlen = strlen( uri );
 
 	const char *quest = strchr( uri, '?' );
-	if ( quest ) {
+	if (quest) {
 		pathlen = MIN( pathlen, quest - uri );
 	}
 	const char *hash = strchr( uri, '#' );
-	if ( hash ) {
+	if (hash) {
 		pathlen = MIN( pathlen, hash - uri );
 	}
 
-	if ( base_pathlen + pathlen + 1 > destsize ) {
+	if (base_pathlen + pathlen + 1 > destsize) {
 		/* Full path string won't fit into destination buffer */
 		return NULL;
 	}
@@ -515,20 +740,20 @@ static esp_err_t upload_post_handler( httpd_req_t *req ) {
 	/* Note sizeof() counts NULL termination hence the -1 */
 	const char *filename = get_path_from_uri( filepath, ( (struct file_server_data *)req->user_ctx )->base_path,
 															req->uri + sizeof( "/upload" ) - 1, sizeof( filepath ) );
-	if ( !filename ) {
+	if (!filename) {
 		/* Respond with 500 Internal Server Error */
 		httpd_resp_send_err( req, HTTPD_500_INTERNAL_SERVER_ERROR, "Filename too long" );
 		return ESP_FAIL;
 	}
 
 	/* Filename cannot have a trailing '/' */
-	if ( filename[strlen( filename ) - 1] == '/' ) {
+	if (filename[strlen( filename ) - 1] == '/') {
 		ESP_LOGE( TAG, "Invalid filename : %s", filename );
 		httpd_resp_send_err( req, HTTPD_500_INTERNAL_SERVER_ERROR, "Invalid filename" );
 		return ESP_FAIL;
 	}
 
-	if ( stat( filepath, &file_stat ) == 0 ) {
+	if (stat( filepath, &file_stat ) == 0) {
 #ifdef DISABLE_OVERWRITE
 		ESP_LOGE( TAG, "File already exists : %s", filepath );
 		/* Respond with 400 Bad Request */
@@ -541,7 +766,7 @@ static esp_err_t upload_post_handler( httpd_req_t *req ) {
 	}
 
 	/* File cannot be larger than a limit */
-	if ( req->content_len > MAX_FILE_SIZE ) {
+	if (req->content_len > MAX_FILE_SIZE) {
 		ESP_LOGE( TAG, "File too large : %d bytes", req->content_len );
 		/* Respond with 400 Bad Request */
 		httpd_resp_send_err( req, HTTPD_400_BAD_REQUEST,
@@ -552,7 +777,7 @@ static esp_err_t upload_post_handler( httpd_req_t *req ) {
 	}
 
 	fd = fopen( filepath, "w" );
-	if ( !fd ) {
+	if (!fd) {
 		ESP_LOGE( TAG, "Failed to create file : %s", filepath );
 		/* Respond with 500 Internal Server Error */
 		httpd_resp_send_err( req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to create file" );
@@ -569,12 +794,12 @@ static esp_err_t upload_post_handler( httpd_req_t *req ) {
 	 * the size of the file being uploaded */
 	int remaining = req->content_len;
 
-	while ( remaining > 0 ) {
+	while (remaining > 0) {
 
 		ESP_LOGI( TAG, "Remaining size : %d", remaining );
 		/* Receive the file part by part into a buffer */
-		if ( ( received = httpd_req_recv( req, buf, MIN( remaining, SCRATCH_BUFSIZE ) ) ) <= 0 ) {
-			if ( received == HTTPD_SOCK_ERR_TIMEOUT ) {
+		if (( received = httpd_req_recv( req, buf, MIN( remaining, SCRATCH_BUFSIZE ) ) ) <= 0) {
+			if (received == HTTPD_SOCK_ERR_TIMEOUT) {
 				/* Retry if timeout occurred */
 				continue;
 			}
@@ -591,7 +816,7 @@ static esp_err_t upload_post_handler( httpd_req_t *req ) {
 		}
 
 		/* Write buffer content to file on storage */
-		if ( received && ( received != fwrite( buf, 1, received, fd ) ) ) {
+		if (received && ( received != fwrite( buf, 1, received, fd ) )) {
 			/* Couldn't write everything to file!
 			 * Storage may be full? */
 			fclose( fd );
@@ -626,17 +851,17 @@ static esp_err_t download_get_handler( httpd_req_t *req ) {
 
 	const char *filename = get_path_from_uri( filepath, ( (struct file_server_data *)req->user_ctx )->base_path,
 															req->uri, sizeof( filepath ) );
-	if ( !filename ) {
+	if (!filename) {
 		ESP_LOGE( TAG, "Filename is too long" );
 		/* Respond with 500 Internal Server Error */
 		httpd_resp_send_err( req, HTTPD_500_INTERNAL_SERVER_ERROR, "Filename too long" );
 		return ESP_FAIL;
 	}
 
-	if ( stat( filepath, &file_stat ) == -1 ) {
+	if (stat( filepath, &file_stat ) == -1) {
 		/* If file not present on SPIFFS check if URI
 		 * corresponds to one of the hardcoded paths */
-		if ( strcmp( filename, "/index.html" ) == 0 ) {
+		if (strcmp( filename, "/index.html" ) == 0) {
 			return get_index_handler( req );
 		}
 		ESP_LOGE( TAG, "Failed to stat file : %s", filepath );
@@ -646,15 +871,15 @@ static esp_err_t download_get_handler( httpd_req_t *req ) {
 	}
 
 	fd = fopen( filepath, "r" );
-	if ( !fd ) {
+	if (!fd) {
 		ESP_LOGE( TAG, "Failed to read existing file : %s", filepath );
 		/* Respond with 500 Internal Server Error */
 		httpd_resp_send_err( req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to read existing file" );
 		return ESP_FAIL;
 	}
 
-   ESP_LOGI( TAG, "Sending file : %s (%ld bytes)...", filename, file_stat.st_size );
- 	set_content_type_from_file( req, filename );
+	ESP_LOGI( TAG, "Sending file : %s (%ld bytes)...", filename, file_stat.st_size );
+	set_content_type_from_file( req, filename );
 
 	/* Retrieve the pointer to scratch buffer for temporary storage */
 	char *chunk = ( (struct file_server_data *)req->user_ctx )->scratch;
@@ -663,9 +888,9 @@ static esp_err_t download_get_handler( httpd_req_t *req ) {
 		/* Read file in chunks into the scratch buffer */
 		chunksize = fread( chunk, 1, SCRATCH_BUFSIZE, fd );
 
-		if ( chunksize > 0 ) {
+		if (chunksize > 0) {
 			/* Send the buffer contents as HTTP response chunk */
-			if ( httpd_resp_send_chunk( req, chunk, chunksize ) != ESP_OK ) {
+			if (httpd_resp_send_chunk( req, chunk, chunksize ) != ESP_OK) {
 				fclose( fd );
 				ESP_LOGE( TAG, "File sending failed!" );
 				/* Abort sending file */
@@ -677,7 +902,7 @@ static esp_err_t download_get_handler( httpd_req_t *req ) {
 		}
 
 		/* Keep looping till the whole file is sent */
-	} while ( chunksize != 0 );
+	} while (chunksize != 0);
 
 	/* Close file after sending complete */
 	fclose( fd );
@@ -693,35 +918,35 @@ static esp_err_t download_get_handler( httpd_req_t *req ) {
  */
 
 httpd_handle_t webserver_start( void ) {
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    httpd_handle_t server = NULL;
+	httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+	httpd_handle_t server = NULL;
 
 	/* Use the URI wildcard matching function in order to
 	 * allow the same handler to respond to multiple different
 	 * target URIs which match the wildcard scheme */
-    config.uri_match_fn = httpd_uri_match_wildcard;
-    /* Use default socket, backlog, and purge/keepalive behavior */
+	config.uri_match_fn = httpd_uri_match_wildcard;
+	/* Use default socket, backlog, and purge/keepalive behavior */
 
 	// Initialize structure tracking websockets to clients
 	memset( &websock_clients, 0, sizeof( websock_clients ) );
 
 	static struct file_server_data *server_data = NULL;
 
-	if ( server_data ) {
+	if (server_data) {
 		ESP_LOGE( TAG, "File server already started" ); // ESP_ERR_INVALID_STATE
 		return NULL;
 	}
 
 	/* Allocate memory for server data */
 	server_data = calloc( 1, sizeof( struct file_server_data ) );
-	if ( !server_data ) {
+	if (!server_data) {
 		ESP_LOGE( TAG, "Failed to allocate memory for server data" ); // ESP_ERR_NO_MEM
 		return NULL;
 	}
 	strlcpy( server_data->base_path, base_path, sizeof( server_data->base_path ) );
 
 	ESP_LOGI( TAG, "Starting server on port: '%d'", config.server_port );
-	if ( httpd_start( &server, &config ) == ESP_OK ) { // Start the httpd server
+	if (httpd_start( &server, &config ) == ESP_OK) { // Start the httpd server
 		ESP_LOGI( TAG, "Registering URI handlers" );
 
 		static httpd_uri_t get_index = { // URI handler for index

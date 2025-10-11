@@ -36,6 +36,16 @@ let pendingKnmiPayload = null;
 let knmiWindowTimer = null;
 let knmiRecalcScheduled = false;
 
+const BACKFILL_WINDOW_SECS = 2 * 24 * 3600;
+const BACKFILL_INTERVAL_MS = 60 * 60 * 1000;
+const BACKFILL_RETRY_MS = 10 * 60 * 1000;
+const BAD_OUT_VALUE = 5.7067;
+const BAD_OUT_TOLERANCE = 0.005;
+
+let backfillTimer = null;
+let backfillInFlight = null;
+let backfillQueue = [];
+
 const ports = new Set(); // { port, subscribe }
 
 // Compaction state
@@ -88,6 +98,7 @@ function openDb() {
       } else {
         scheduleKnmiWindowCheck();
       }
+      scheduleBackfill(10 * 1000);
       // notify all connected pages that DB is ready
       try { broadcastAll({ type: 'dbReady' }); } catch (_) {}
     };
@@ -150,17 +161,33 @@ function connectWs() {
       reconnectIdx = 0;
       broadcastAll({ type: 'ws', state: 'open' });
       trySendKnmiWindow();
+      trySendBackfillQueue();
     };
     ws.onclose = () => {
       wsState = 'closed';
       broadcastAll({ type: 'ws', state: 'closed' });
+      if (backfillInFlight) {
+        if (backfillInFlight.timeout) {
+          clearTimeout(backfillInFlight.timeout);
+        }
+        if (backfillInFlight.payload) {
+          backfillQueue.unshift(backfillInFlight.payload);
+        }
+        backfillInFlight = null;
+      }
+      scheduleBackfill(BACKFILL_RETRY_MS);
       const delay = reconnectDelays[Math.min(reconnectIdx++, reconnectDelays.length - 1)];
       setTimeout(connectWs, delay);
     };
     ws.onmessage = (evt) => {
       let obj = null;
       try { obj = JSON.parse(evt.data); } catch (_) { return; }
-      if (obj) writeSnapshot(obj);
+      if (!obj) return;
+      if (obj && typeof obj === 'object' && obj.type === 'knmi_series') {
+        handleKnmiSeriesResponse(obj);
+        return;
+      }
+      writeSnapshot(obj);
       latestSnapshot = obj;
       if (!flushTimer) {
         flushTimer = setTimeout(() => {
@@ -206,7 +233,18 @@ self.onconnect = (e) => {
   const rec = { port, subscribe: false };
   ports.add(rec);
   port.start();
-  // Notify current client count
+// ---- SAFE MINI-BRIDGE: stuur logs naar alle open ports ----
+if (!console.__bridged) {
+  const __orig = console.log.bind(console);
+  console.log = (...args) => {
+    try { ports.forEach(r => r.port.postMessage({ __sw_log: args })); } catch {}
+    __orig(...args);
+  };
+  console.__bridged = true;
+}
+// ------------------------------------------------------------
+  console.log('SharedWorker started');
+// Notify current client count
   broadcastClients();
   port.onmessage = (ev) => {
     const msg = ev.data || {};
@@ -301,8 +339,7 @@ function computeKnmiWindow() {
       const record = cursor.value;
       if (record && typeof record.time === 'number') {
         if (latestTime === null) latestTime = record.time;
-        const hasOut = typeof record.out === 'number' && Number.isFinite(record.out);
-        if (hasOut) {
+        if (!needsOutBackfill(record)) {
           lastValidTime = record.time;
           finalize();
           return;
@@ -386,6 +423,198 @@ function trySendKnmiWindow() {
       }, 1000);
     }
   }
+}
+
+function needsOutBackfill(record) {
+  if (!record) return false;
+  const value = record.out;
+  if (typeof value !== 'number') return true;
+  if (!Number.isFinite(value)) return true;
+  if (Math.abs(value - BAD_OUT_VALUE) < BAD_OUT_TOLERANCE) return true;
+  return false;
+}
+
+function scheduleBackfill(delayMs = BACKFILL_INTERVAL_MS) {
+  if (backfillTimer) {
+    clearTimeout(backfillTimer);
+  }
+  backfillTimer = setTimeout(runBackfill, Math.max(0, delayMs));
+}
+
+function runBackfill() {
+  backfillTimer = null;
+  if (!dbReady || !db) {
+    scheduleBackfill(BACKFILL_INTERVAL_MS);
+    return;
+  }
+  if (!backfillInFlight) {
+    trySendBackfillQueue();
+    if (backfillInFlight) {
+      return;
+    }
+  }
+  if (backfillInFlight) {
+    return;
+  }
+  findNextMissingOut().then((start) => {
+    if (!Number.isFinite(start)) {
+      scheduleBackfill(BACKFILL_INTERVAL_MS);
+      return;
+    }
+    const windowStart = Math.floor(start);
+    const windowEnd = windowStart + BACKFILL_WINDOW_SECS;
+    const pendingSame = (backfillInFlight && backfillInFlight.payload && backfillInFlight.payload.start === windowStart) ||
+      backfillQueue.some((item) => item.start === windowStart);
+    if (pendingSame) {
+      scheduleBackfill(BACKFILL_RETRY_MS);
+      return;
+    }
+    const payload = {
+      type: 'knmi_series',
+      start: windowStart,
+      end: windowEnd,
+      request_id: `knmi-bf-${windowStart}-${Date.now()}`
+    };
+    console.log('[KNMI] queue backfill window', new Date(windowStart * 1000).toISOString(), 'to', new Date(windowEnd * 1000).toISOString());
+    backfillQueue.push(payload);
+    trySendBackfillQueue();
+    if (!backfillInFlight) {
+      scheduleBackfill(BACKFILL_RETRY_MS);
+    }
+  }).catch(() => {
+    scheduleBackfill(BACKFILL_RETRY_MS);
+  });
+}
+
+function findNextMissingOut() {
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(DB_STORE_NAME, 'readonly');
+      const store = tx.objectStore(DB_STORE_NAME);
+      const req = store.openCursor();
+      req.onsuccess = (ev) => {
+        const cursor = ev.target.result;
+        if (!cursor) {
+          resolve(null);
+          return;
+        }
+        const record = cursor.value;
+        if (record && typeof record.time === 'number' && needsOutBackfill(record)) {
+          resolve(record.time);
+          return;
+        }
+        cursor.continue();
+      };
+      req.onerror = () => resolve(null);
+    } catch (_) {
+      resolve(null);
+    }
+  });
+}
+
+function trySendBackfillQueue() {
+  if (backfillInFlight) return;
+  if (!ws || ws.readyState !== 1) return;
+  const payload = backfillQueue.shift();
+  if (!payload) return;
+  const text = JSON.stringify(payload);
+  try {
+    ws.send(text);
+    backfillInFlight = {
+      requestId: payload.request_id || null,
+      payload,
+      sentAt: Date.now(),
+      timeout: setTimeout(() => {
+        if (backfillInFlight && backfillInFlight.payload === payload) {
+          console.warn('[KNMI] backfill response timeout for window starting', payload.start);
+          backfillInFlight = null;
+          backfillQueue.unshift(payload);
+          scheduleBackfill(BACKFILL_RETRY_MS);
+        }
+      }, BACKFILL_RETRY_MS)
+    };
+  } catch (_) {
+    backfillInFlight = null;
+    backfillQueue.unshift(payload);
+  }
+}
+
+function handleKnmiSeriesResponse(msg) {
+  const requestId = msg && typeof msg.request_id === 'string' ? msg.request_id : null;
+  const inflight = backfillInFlight;
+  if (inflight && (!inflight.requestId || inflight.requestId === requestId)) {
+    if (inflight.timeout) {
+      clearTimeout(inflight.timeout);
+    }
+    backfillInFlight = null;
+  }
+  if (!msg || msg.ok === false) {
+    if (inflight && inflight.payload) {
+      backfillQueue.unshift(inflight.payload);
+    }
+    scheduleBackfill(BACKFILL_RETRY_MS);
+    return;
+  }
+  const samples = Array.isArray(msg.samples) ? msg.samples : [];
+  applyBackfillSamples(samples).then((updated) => {
+    if (samples.length) {
+      console.log(`[KNMI] backfill applied ${updated}/${samples.length} samples`);
+    }
+    if (updated > 0) {
+      scheduleKnmiWindowCheck(0);
+    }
+    const nextDelay = (updated === 0 && samples.length > 0 && backfillInFlight) ? BACKFILL_RETRY_MS : BACKFILL_INTERVAL_MS;
+    scheduleBackfill(nextDelay);
+  }).catch(() => scheduleBackfill(BACKFILL_RETRY_MS));
+}
+
+function applyBackfillSamples(samples) {
+  return new Promise((resolve) => {
+    if (!dbReady || !db || !Array.isArray(samples) || samples.length === 0) {
+      resolve(0);
+      return;
+    }
+    let updated = 0;
+    try {
+      const tx = db.transaction(DB_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(DB_STORE_NAME);
+      tx.oncomplete = () => resolve(updated);
+      tx.onabort = () => resolve(updated);
+      tx.onerror = () => resolve(updated);
+      let index = 0;
+      function processNext() {
+        if (index >= samples.length) {
+          return;
+        }
+        const entry = samples[index++];
+        if (!Array.isArray(entry) || entry.length < 2) {
+          processNext();
+          return;
+        }
+        const time = Number(entry[0]);
+        const temp = Number(entry[1]);
+        if (!Number.isFinite(time) || !Number.isFinite(temp)) {
+          processNext();
+          return;
+        }
+        const getReq = store.get(time);
+        getReq.onsuccess = () => {
+          const record = getReq.result;
+          if (record && needsOutBackfill(record)) {
+            const original = record.out;
+            console.log('[KNMI] would update snapshot', new Date(time * 1000).toISOString(), 'out from', original, 'to', temp);
+            processNext();
+          } else {
+            processNext();
+          }
+        };
+        getReq.onerror = () => processNext();
+      }
+      processNext();
+    } catch (_) {
+      resolve(updated);
+    }
+  });
 }
 
 function applyCompactionCfg(cfg, fromLoad = false){

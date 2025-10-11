@@ -56,6 +56,7 @@ time_t log_saved_time, log_update_time;
 
 time_t now, next_heap_time;
 static time_t next_knmi_fetch = 0;
+#define KNMI_FETCH_OFFSET_SECONDS (4 * 60)
 #define KNMI_FETCH_INTERVAL_SECONDS (10 * 60)
 #define KNMI_RETRY_INTERVAL_SECONDS 60
 
@@ -143,12 +144,15 @@ void monitor_task() {
 			time( &now );
 			if (heater_status.wifi) {
 				if (next_knmi_fetch == 0) {
-					next_knmi_fetch = now;
+					next_knmi_fetch = (now / 600) * 600 + KNMI_FETCH_OFFSET_SECONDS;
+					if (now < next_knmi_fetch) {
+						next_knmi_fetch -= KNMI_FETCH_INTERVAL_SECONDS;
+					}
 				}
 				if (now >= next_knmi_fetch) {
 					knmi_sample_t sample = {0};
-					ESP_LOGI( TAG, "Trigger KNMI fetch (instant)" );
-					esp_err_t knmi_err = knmi_fetch_point(now, &sample);
+					ESP_LOGI( TAG, "Trigger KNMI fetch at scheduled time" );
+					esp_err_t knmi_err = knmi_fetch_point(next_knmi_fetch, &sample);
 					if (knmi_err == ESP_OK && isfinite(sample.temperature)) {
 						heater_status.out = sample.temperature;
 						struct tm sample_tm;
@@ -161,11 +165,11 @@ void monitor_task() {
 					} else {
 						ESP_LOGW( TAG, "KNMI fetch failed: %s", esp_err_to_name( knmi_err ) );
 					}
-					time_t delay = KNMI_FETCH_INTERVAL_SECONDS;
-					if (knmi_err == ESP_ERR_INVALID_STATE || knmi_err == ESP_ERR_NOT_FOUND) {
-						delay = KNMI_RETRY_INTERVAL_SECONDS;
+					if (knmi_err == ESP_OK) {
+						next_knmi_fetch = (now / 600) * 600 + KNMI_FETCH_OFFSET_SECONDS + KNMI_FETCH_INTERVAL_SECONDS;
+					} else {
+						next_knmi_fetch = now + KNMI_RETRY_INTERVAL_SECONDS;
 					}
-					next_knmi_fetch = now + delay;
 				}
 			} else {
 				if (next_knmi_fetch != 0) {
@@ -184,8 +188,8 @@ void monitor_task() {
 			}
 #endif
 			if ( now > next_heap_time ) {
-				//next_heap_time = now + 60 * 60;
-				//heap_caps_print_heap_info( MALLOC_CAP_DEFAULT ); // Log heap memory every 60 minutes
+				next_heap_time = now + 60 * 60;
+				heap_caps_print_heap_info( MALLOC_CAP_DEFAULT ); // Log heap memory every 60 minutes
 				//gpio_dump_io_configuration( stdout, 1ULL << SSR_ONE_GPIO_PIN | 1ULL << SSR_TWO_GPIO_PIN | 1ULL << PZEM_RX_GPIO_PIN | 1ULL << PZEM_TX_GPIO_PIN );
 			}
 			step = 0;
@@ -288,7 +292,7 @@ bool monitor_task_start() {
 	log_read();
 #endif
 
-	xTaskCreate( monitor_task, "monitor", 4096 + 4096, NULL, MONITOR_TASK_PRIORITY, NULL );
+	xTaskCreate( monitor_task, "monitor", 4096 + 4096 + 4096 + 4096 + 4096 + 4096, NULL, MONITOR_TASK_PRIORITY, NULL );
 
 	return ( true );
 }

@@ -4,9 +4,15 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <errno.h>
+#include "esp_http_client.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -27,6 +33,8 @@ typedef struct {
 } knmi_buffer_t;
 
 static uint32_t s_window_secs = KNMI_WINDOW_DEFAULT_SECONDS;
+static char s_rate_remaining[16] = {0};
+static char s_rate_reset[20] = {0};
 
 static const char KNMI_ROOT_CA_PEM[] =
 "-----BEGIN CERTIFICATE-----\n"
@@ -124,6 +132,16 @@ static esp_err_t knmi_http_event_handler(esp_http_client_event_t *evt) {
     }
 
     switch (evt->event_id) {
+    case HTTP_EVENT_ON_HEADER:
+        if (evt->header_key && evt->header_value) {
+            if (strcasecmp(evt->header_key, "x-ratelimit-remaining") == 0) {
+                snprintf(s_rate_remaining, sizeof(s_rate_remaining), "%s", evt->header_value);
+            } else if (strcasecmp(evt->header_key, "x-ratelimit-reset") == 0) {
+                snprintf(s_rate_reset, sizeof(s_rate_reset), "%s", evt->header_value);
+            }
+            //ESP_LOGI(TAG, "KNMI header: %s: %s", evt->header_key, evt->header_value);
+        }
+        break;
     case HTTP_EVENT_ON_DATA:
         if (evt->data && evt->data_len > 0) {
             size_t remaining = (ctx->capacity > ctx->length) ? (ctx->capacity - ctx->length - 1) : 0;
@@ -147,8 +165,6 @@ static esp_err_t knmi_http_event_handler(esp_http_client_event_t *evt) {
 
     return ESP_OK;
 }
-
-extern time_t __tm_to_time_t(const struct tm *);
 
 static int64_t knmi_days_from_civil(int y, unsigned m, unsigned d) {
     y -= m <= 2;
@@ -415,49 +431,96 @@ static void time_to_iso8601(time_t t, char *buffer, size_t len) {
 }
 
 static esp_err_t knmi_http_fetch(const char *url, knmi_buffer_t *buffer) {
-    esp_http_client_config_t config = {
-        .url = url,
-        .timeout_ms = KNMI_HTTP_TIMEOUT_MS,
-        .event_handler = knmi_http_event_handler,
-        .user_data = buffer,
-        .cert_pem = KNMI_ROOT_CA_PEM,
-    };
+    esp_err_t err = ESP_FAIL;
+    int status = 0;
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        esp_http_client_config_t config = {
+            .url = url,
+            .timeout_ms = KNMI_HTTP_TIMEOUT_MS,
+            .event_handler = knmi_http_event_handler,
+            .user_data = buffer,
+            .cert_pem = KNMI_ROOT_CA_PEM,
+        };
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (!client) {
-        ESP_LOGE(TAG, "Failed to create KNMI HTTP client");
-        return ESP_FAIL;
-    }
+        esp_http_client_handle_t client = esp_http_client_init(&config);
+        if (!client) {
+            ESP_LOGE(TAG, "Failed to create KNMI HTTP client");
+            return ESP_FAIL;
+        }
 
-    esp_err_t err = esp_http_client_set_header(client, "Accept", "application/prs.coverage+json");
-    if (err == ESP_OK) {
-        err = esp_http_client_set_header(client, "Authorization", KNMI_EDR_API_KEY);
-    }
-    if (err == ESP_OK) {
-        err = esp_http_client_set_header(client, "Accept-Encoding", "identity");
-    }
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to set KNMI request headers: %s", esp_err_to_name(err));
+        err = esp_http_client_set_header(client, "Accept", "application/prs.coverage+json");
+        if (err == ESP_OK) {
+            err = esp_http_client_set_header(client, "Authorization", KNMI_EDR_API_KEY);
+        }
+        if (err == ESP_OK) {
+            err = esp_http_client_set_header(client, "Accept-Encoding", "identity");
+        }
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to set KNMI request headers: %s", esp_err_to_name(err));
+            esp_http_client_cleanup(client);
+            return err;
+        }
+
+        s_rate_remaining[0] = '\0';
+        s_rate_reset[0] = '\0';
+
+        err = esp_http_client_perform(client);
+        if (err == ESP_OK) {
+            status = esp_http_client_get_status_code(client);
+
+            if (s_rate_remaining[0] || s_rate_reset[0]) {
+                char reset_local[32] = {0};
+                if (s_rate_reset[0]) {
+                    long long reset_epoch = strtoll(s_rate_reset, NULL, 10);
+                    if (reset_epoch > 0) {
+                        time_t reset_time = (time_t)reset_epoch;
+                        struct tm local_tm;
+                        if (localtime_r(&reset_time, &local_tm)) {
+                            strftime(reset_local, sizeof(reset_local), "%Y-%m-%d %H:%M:%S", &local_tm);
+                        }
+                    }
+                }
+                if (reset_local[0]) {
+                    ESP_LOGI(TAG, "KNMI rate-limit remaining=%s reset=%s (%s)",
+                             s_rate_remaining[0] ? s_rate_remaining : "?",
+                             s_rate_reset[0] ? s_rate_reset : "?",
+                             reset_local);
+                } else {
+                    ESP_LOGI(TAG, "KNMI rate-limit remaining=%s reset=%s",
+                             s_rate_remaining[0] ? s_rate_remaining : "?",
+                             s_rate_reset[0] ? s_rate_reset : "?");
+                }
+            }
+
+            esp_http_client_cleanup(client);
+
+            if (status < 200 || status >= 300) {
+                ESP_LOGW(TAG, "KNMI request returned HTTP %d", status);
+                return (status == 404) ? ESP_ERR_NOT_FOUND : ESP_FAIL;
+            }
+
+            return ESP_OK;
+        }
+
+        ESP_LOGW(TAG, "KNMI request attempt %d failed: %s", attempt + 1, esp_err_to_name(err));
+        int err2 = 0;
+        int tls_flags = 0;
+        esp_err_t tls_err = esp_http_client_get_and_clear_last_tls_error(client, &err2, &tls_flags);
+        ESP_LOGW(TAG, "  errno=%d esp_tls_err=0x%x flags=0x%x", err2, tls_err, tls_flags);
+        if (err2 == 0) {
+            int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+            if (sock < 0) {
+                ESP_LOGE(TAG, "Diagnostic socket() failed: errno=%d", errno);
+            } else {
+                ESP_LOGI(TAG, "Diagnostic socket() succeeded: %d", sock);
+                close(sock);
+            }
+        }
         esp_http_client_cleanup(client);
-        return err;
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 
-    err = esp_http_client_perform(client);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "KNMI request failed: %s", esp_err_to_name(err));
-        esp_http_client_cleanup(client);
-        return err;
-    }
-
-    int status = esp_http_client_get_status_code(client);
-    esp_http_client_cleanup(client);
-
-    if (status < 200 || status >= 300) {
-        ESP_LOGW(TAG, "KNMI request returned HTTP %d", status);
-        return (status == 404) ? ESP_ERR_NOT_FOUND : ESP_FAIL;
-    }
-
-    return ESP_OK;
+    return err;
 }
 
 esp_err_t knmi_fetch_series(time_t start_time, time_t end_time, knmi_series_t *out_series) {
@@ -506,24 +569,33 @@ esp_err_t knmi_fetch_series(time_t start_time, time_t end_time, knmi_series_t *o
         }
     }
 
-    ESP_LOGI(TAG, "KNMI request URL: %s", url);
+    size_t payload_capacity = 16384;
+    char *payload = (char *)malloc(payload_capacity);
+    if (!payload) {
+        ESP_LOGE(TAG, "Failed to allocate KNMI payload buffer");
+        return ESP_ERR_NO_MEM;
+    }
+    payload[0] = '\0';
 
-    char payload[4096] = {0};
     knmi_buffer_t buffer = {
         .buffer = payload,
-        .capacity = sizeof(payload),
+        .capacity = payload_capacity,
         .length = 0,
     };
 
     esp_err_t err = knmi_http_fetch(url, &buffer);
     if (err != ESP_OK) {
+        free(payload);
         return err;
     }
 
     if (!knmi_parse_series_json(payload, out_series)) {
         ESP_LOGW(TAG, "Failed to parse KNMI response");
+        free(payload);
         return ESP_FAIL;
     }
+
+    free(payload);
 
     ESP_LOGI(TAG, "KNMI returned %u samples", (unsigned)out_series->count);
     return ESP_OK;

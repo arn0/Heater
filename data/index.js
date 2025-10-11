@@ -86,6 +86,10 @@ function initSharedWorker() {
             const sw = new SharedWorker('ws-worker.js');
             swPort = sw.port;
             swPort.onmessage = onWorkerMessage;
+            swPort.addEventListener('message', (e) => {
+            const d = e.data;
+            if (d && d.__sw_log) console.log('[SW]', ...d.__sw_log);
+            });
             swPort.start();
             swPort.postMessage({ type: 'init', host: window.location.hostname, subscribe: true });
             useShared = true;
