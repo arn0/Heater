@@ -127,6 +127,104 @@ struct websock_instance {
 // Websocket instance for multiple browser clients
 static struct websock_instance websock_clients[MAX_WEBSOCK_CLIENTS];
 
+static esp_err_t send_sensor_update_frame( char *buffer, size_t client );
+
+static size_t build_schedule_json(char *buffer, size_t capacity) {
+    if (!buffer || capacity == 0) {
+        return 0;
+    }
+
+    const heater_config_t *cfg = heater_config_get();
+    char day_start[6] = "00:00";
+    char night_start[6] = "00:00";
+    if (cfg) {
+        heater_config_string_from_minutes(cfg->day_start_minutes, day_start, sizeof(day_start));
+        heater_config_string_from_minutes(cfg->night_start_minutes, night_start, sizeof(night_start));
+    }
+
+    size_t used = 0;
+    int written = snprintf(buffer + used, capacity - used,
+                           "{\"type\":\"schedule\",\"schedule\":{\"target\":%.2f,\"base\":%.2f,\"is_day\":%s,\"preheat\":%s,\"minutes_to_next\":%ld,\"override\":%s",
+                           heater_status.schedule_target,
+                           heater_status.scheduled_base_target,
+                           heater_status.schedule_is_day ? "true" : "false",
+                           heater_status.preheat_active ? "true" : "false",
+                           (long)heater_status.minutes_to_next_transition,
+                           heater_status.override_active ? "true" : "false");
+    if (written < 0 || (size_t)written >= capacity - used) {
+        return 0;
+    }
+    used += (size_t)written;
+
+    if (heater_status.override_active) {
+        written = snprintf(buffer + used, capacity - used,
+                           ",\"override_target\":%.2f",
+                           heater_status.override_target);
+        if (written < 0 || (size_t)written >= capacity - used) {
+            return 0;
+        }
+        used += (size_t)written;
+        if (heater_status.override_expires > 0) {
+            written = snprintf(buffer + used, capacity - used,
+                               ",\"override_until\":%lld",
+                               (long long)heater_status.override_expires);
+            if (written < 0 || (size_t)written >= capacity - used) {
+                return 0;
+            }
+            used += (size_t)written;
+        }
+    }
+
+    written = snprintf(buffer + used, capacity - used, "}" );
+    if (written < 0 || (size_t)written >= capacity - used) {
+        return 0;
+    }
+    used += (size_t)written;
+
+    if (cfg) {
+        written = snprintf(buffer + used, capacity - used,
+                           ",\"config\":{\"day_start\":\"%s\",\"night_start\":\"%s\",\"day_temp\":%.2f,\"night_temp\":%.2f,\"floor_temp\":%.2f,\"night_enabled\":%s,\"preheat_min\":%d,\"preheat_max\":%d,\"warmup_rate\":%.3f,\"stage_full\":%.3f,\"stage_single\":%.3f,\"stage_hold\":%.3f,\"override_minutes\":%d}}",
+                           day_start,
+                           night_start,
+                           cfg->day_temperature,
+                           cfg->night_temperature,
+                           cfg->floor_temperature,
+                           cfg->night_enabled ? "true" : "false",
+                           cfg->preheat_min_minutes,
+                           cfg->preheat_max_minutes,
+                           cfg->warmup_rate_c_per_min,
+                           cfg->stage_full_delta,
+                           cfg->stage_single_delta,
+                           cfg->stage_hold_delta,
+                           cfg->override_duration_minutes);
+        if (written < 0 || (size_t)written >= capacity - used) {
+            return 0;
+        }
+        used += (size_t)written;
+    } else {
+        written = snprintf(buffer + used, capacity - used, ",\"config\":{}}" );
+        if (written < 0 || (size_t)written >= capacity - used) {
+            return 0;
+        }
+        used += (size_t)written;
+    }
+
+    return used;
+}
+
+void webserver_notify_schedule_update(void) {
+	char payload[640];
+	size_t len = build_schedule_json(payload, sizeof(payload));
+	if (len == 0) {
+		return;
+	}
+	for (size_t i = 0; i < MAX_WEBSOCK_CLIENTS; ++i) {
+		if (websock_clients[i].handle != NULL) {
+			send_sensor_update_frame(payload, i);
+		}
+	}
+}
+
 /*
  * @brief WebSocket has been closed, clean up associated data structures
  * @param context Unused here, but had to be nonzero for this callback to be called upon socket close
@@ -166,7 +264,7 @@ static void websocket_close_free_ctx( void *ctx ) {
 	}
 }
 
-esp_err_t send_sensor_update_frame( char *buffer, size_t client ) {
+static esp_err_t send_sensor_update_frame( char *buffer, size_t client ) {
 	if (client >= MAX_WEBSOCK_CLIENTS) {
 		return ESP_ERR_INVALID_ARG;
 	}
@@ -430,6 +528,7 @@ static void apply_override_delta( float delta ) {
 		heater_status.minutes_to_next_transition = 0;
 	}
 	extend_override_window();
+	webserver_notify_schedule_update();
 	next_log_time = 0;
 }
 
@@ -439,6 +538,7 @@ static void clear_override( void ) {
 	heater_status.override_expires = 0;
 	heater_status.target = heater_status.schedule_target;
 	heater_status.update = true;
+	webserver_notify_schedule_update();
 	next_log_time = 0;
 }
 
@@ -546,6 +646,7 @@ static esp_err_t get_ws_handler( httpd_req_t *req ) {
 				req->sess_ctx = (void *)&websock_clients[i];
 				req->free_ctx = websocket_close_free_ctx;
 				next_log_time = 0; // send update immediately
+				webserver_notify_schedule_update();
 				return ESP_OK;
 			}
 		}

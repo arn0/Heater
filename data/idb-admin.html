@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IDB beheer</title>
+  <link rel="stylesheet" href="index.css">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0e1217">
+  <script type="module" src="idb-admin.js" defer></script>
+  <style>
+    .card-toolbar { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px; align-items:flex-end; }
+    .card-toolbar label { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:600; }
+    .card-toolbar .field { display:flex; flex-direction:column; gap:6px; min-width:140px; }
+    .card-toolbar input[type="number"],
+    .card-toolbar input[type="text"],
+    .card-toolbar input[type="datetime-local"] { background:var(--chip); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:6px 10px; min-height:32px; }
+    table { width:100%; border-collapse:collapse; font-size:15px; }
+    thead { background:rgba(255,255,255,0.04); }
+    th, td { padding:10px; border-bottom:1px solid var(--border); text-align:left; }
+    tbody tr { cursor:pointer; }
+    tbody tr:hover { background:rgba(58,160,255,0.08); }
+    tbody tr.selected { background:rgba(58,160,255,0.18); }
+    .mono { font-family: "SFMono-Regular", Consolas, Menlo, monospace; }
+    .detail-body textarea { width:100%; min-height:240px; resize:vertical; background:var(--chip); border:1px solid var(--border); border-radius:10px; padding:12px; color:var(--text); font-size:14px; line-height:1.4; }
+    .detail-actions { display:flex; gap:12px; align-items:center; margin-top:12px; }
+    .status-pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:10px; border:1px solid var(--border); background:var(--chip); font-size:13px; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--chip); border:1px solid var(--border); font-size:12px; }
+    .summary-grid { display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  </style>
+</head>
+<body>
+  <div id="offline_banner" role="status" aria-live="polite" hidden>Offline – opnieuw verbinden…</div>
+
+  <header class="topbar" role="banner">
+    <div class="brand">Radiator</div>
+    <div class="center-icons">
+      <div class="status-pill">DB <span id="db_status">-</span></div>
+      <div class="status-pill">SW <span id="sw_status">-</span></div>
+    </div>
+    <div class="status">
+      <a href="index.html" class="chip">Terug</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="card">
+      <div class="card-title">Snapshots</div>
+      <div class="section">
+        <div class="card-toolbar">
+          <div class="field">
+            <label for="limit_input">Aantal</label>
+            <input type="number" id="limit_input" min="1" max="500" step="10" value="50">
+          </div>
+          <div class="field">
+            <label for="from_input">Vanaf (datum/tijd)</label>
+            <input type="datetime-local" id="from_input">
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button class="btn" id="load_latest">Laad laatste</button>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button class="btn btn-secondary" id="load_range">Laad bereik</button>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button class="btn btn-secondary" id="refresh_btn">Ververs lijst</button>
+          </div>
+          <div class="field" style="flex:1; min-width:200px;">
+            <label for="search_input">Zoek</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="search_input" placeholder="veld, waarde of tijd" style="flex:1;">
+              <button class="btn btn-secondary" id="search_btn">Zoek</button>
+            </div>
+          </div>
+        </div>
+        <div class="summary-grid" style="margin-bottom:12px;">
+          <div class="status-pill">Totaal <span id="stat_count" class="badge">-</span></div>
+          <div class="status-pill">Oudste <span id="stat_oldest" class="badge mono">-</span></div>
+          <div class="status-pill">Nieuwste <span id="stat_newest" class="badge mono">-</span></div>
+        </div>
+        <div style="max-height:420px; overflow:auto; border:1px solid var(--border); border-radius:10px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Tijd</th>
+                <th>Ruimte</th>
+                <th>Buiten</th>
+                <th>Target</th>
+                <th>Power</th>
+              </tr>
+            </thead>
+            <tbody id="snapshot_rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Details</div>
+      <div class="section detail-body">
+        <div class="status-pill" style="margin-bottom:12px;">Geselecteerd <span id="detail_time" class="badge mono">-</span></div>
+        <textarea id="detail_json" placeholder="Selecteer een snapshot om de inhoud te bekijken"></textarea>
+        <div class="detail-actions">
+          <button class="btn" id="save_btn" disabled>Opslaan</button>
+          <button class="btn btn-secondary" id="delete_btn" disabled>Verwijderen</button>
+          <div id="detail_status" class="status-line"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" role="status" hidden></div>
+</body>
+</html>

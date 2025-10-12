@@ -52,6 +52,7 @@ let backfillQueue = [];
 const backfillFailures = new Map(); // windowStart -> attempt count
 const backfillSkipped = new Map(); // windowStart -> timestamp (ms) until retry allowed
 const missingSnapshotLogged = new Set();
+let currentSchedule = null;
 
 function shouldSkipBackfillWindow(windowStart) {
   if (!Number.isFinite(windowStart)) return false;
@@ -228,6 +229,10 @@ function connectWs() {
         handleKnmiSeriesResponse(obj);
         return;
       }
+      if (obj && typeof obj === 'object' && obj.type === 'schedule') {
+        handleScheduleMessage(obj);
+        return;
+      }
       writeSnapshot(obj);
       latestSnapshot = obj;
       if (!flushTimer) {
@@ -328,6 +333,13 @@ if (!console.__bridged) {
     }
   };
   port.onmessageerror = () => {};
+  if (currentSchedule && currentSchedule.schedule) {
+    const msg = { type: 'schedule', schedule: { ...currentSchedule.schedule } };
+    if (currentSchedule.config) {
+      msg.config = { ...currentSchedule.config };
+    }
+    try { port.postMessage(msg); } catch (_) {}
+  }
 };
 
 function broadcastClients(){
@@ -337,6 +349,38 @@ function broadcastClients(){
     if (!postToPort(rec, msg)) changed = true;
   }
   if (changed) broadcastClients();
+}
+
+function handleScheduleMessage(msg) {
+  const payload = extractSchedulePayload(msg);
+  if (!payload || !payload.schedule) return;
+  currentSchedule = payload;
+  const out = { type: 'schedule', schedule: { ...payload.schedule } };
+  if (payload.config) {
+    out.config = { ...payload.config };
+  }
+  broadcastAll(out);
+}
+
+function extractSchedulePayload(msg) {
+  if (!msg || typeof msg !== 'object') return null;
+  const out = {};
+  if (msg.schedule && typeof msg.schedule === 'object') {
+    out.schedule = { ...msg.schedule };
+  } else if (msg.data && typeof msg.data === 'object') {
+    out.schedule = { ...msg.data };
+  } else {
+    const copy = { ...msg };
+    if (copy.type) delete copy.type;
+    out.schedule = copy;
+  }
+  if (msg.config && typeof msg.config === 'object') {
+    out.config = { ...msg.config };
+  } else if (out.schedule && typeof out.schedule.config === 'object') {
+    out.config = { ...out.schedule.config };
+    delete out.schedule.config;
+  }
+  return out;
 }
 
 function postToPort(rec, msg) {

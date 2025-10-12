@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 httpd_handle_t webserver_start();
+void webserver_notify_schedule_update(void);
 
 #ifdef __cplusplus
 }

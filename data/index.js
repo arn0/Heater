@@ -79,6 +79,106 @@ function sleep(ms) {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function normalizeSchedulePayload(msg) {
+	if (!msg || typeof msg !== 'object') return null;
+	let base = null;
+	if (msg.schedule && typeof msg.schedule === 'object') {
+		base = msg.schedule;
+	} else if (msg.data && typeof msg.data === 'object') {
+		base = msg.data;
+	} else {
+		base = msg;
+	}
+	if (!base || typeof base !== 'object') return null;
+	const copy = { ...base };
+	if (copy.type) delete copy.type;
+	if (msg.config && typeof msg.config === 'object') {
+		copy.config = { ...msg.config };
+	}
+	return copy;
+}
+
+function applySchedulePayload(msg) {
+	const payload = normalizeSchedulePayload(msg);
+	if (!payload) {
+		latestSchedule = null;
+		updateScheduleUI();
+		return;
+	}
+	if (payload.config) {
+		applyScheduleConfig(payload.config);
+	}
+	const { config, ...scheduleOnly } = payload;
+	latestSchedule = scheduleOnly;
+	updateScheduleUI();
+}
+
+function updateScheduleUI() {
+	if (!scheduleMode || !scheduleNext || !scheduledTarget || !overrideState) return;
+	const sched = latestSchedule;
+	if (!sched) {
+		scheduleMode.textContent = '-';
+		scheduleNext.textContent = '-';
+		scheduledTarget.textContent = '-';
+		overrideState.textContent = 'Uit';
+		if (overrideClear) overrideClear.disabled = true;
+		return;
+	}
+	if (typeof sched.target === 'number') {
+		scheduledTarget.textContent = sched.target.toFixed(1);
+	} else {
+		scheduledTarget.textContent = '-';
+	}
+	let modeLabel = 'Dag';
+	if (sched.preheat) {
+		modeLabel = 'Voorverwarmen';
+	} else if (sched.is_day === false) {
+		modeLabel = 'Nacht';
+	}
+	scheduleMode.textContent = modeLabel;
+	if (typeof sched.minutes_to_next === 'number') {
+		scheduleNext.textContent = formatMinutes(sched.minutes_to_next);
+	} else {
+		scheduleNext.textContent = '-';
+	}
+	if (sched.override) {
+		let overrideText = 'Handmatig';
+		if (typeof sched.override_target === 'number') {
+			overrideText = `Handmatig ${sched.override_target.toFixed(1)} °C`;
+		}
+		if (sched.override_until) {
+			const until = new Date(sched.override_until * 1000);
+			overrideText += ` tot ${until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+		}
+		overrideState.textContent = overrideText;
+		if (overrideClear) overrideClear.disabled = false;
+	} else {
+		overrideState.textContent = 'Uit';
+		if (overrideClear) overrideClear.disabled = true;
+	}
+}
+
+function applyScheduleConfig(cfg){
+	if (!cfg || typeof cfg !== 'object') return;
+	if (cfg.day_start && ti_day && document.activeElement !== ti_day) {
+		ti_day.value = cfg.day_start;
+	}
+	if (cfg.night_start && ti_nig && document.activeElement !== ti_nig) {
+		ti_nig.value = cfg.night_start;
+	}
+	if (typeof cfg.day_temp === 'number' && ta_day && document.activeElement !== ta_day) {
+		ta_day.value = cfg.day_temp.toFixed(1);
+	}
+	if (typeof cfg.night_temp === 'number' && ta_nig && document.activeElement !== ta_nig) {
+		ta_nig.value = cfg.night_temp.toFixed(1);
+	}
+	if (typeof cfg.night_enabled === 'boolean' && ti_flg) {
+		ti_flg.checked = cfg.night_enabled;
+		if (ta_nig) ta_nig.disabled = !cfg.night_enabled;
+		if (ti_nig) ti_nig.disabled = !cfg.night_enabled;
+	}
+}
+
 
 function initSharedWorker() {
     try {
@@ -135,8 +235,20 @@ var counter = 0;
 
 function onMessage(event) {
 	if (useShared) return; // using worker path
-	update = JSON.parse(event.data);
-	latestSchedule = update && update.schedule ? { ...update.schedule } : null;
+	let msg;
+	try {
+		msg = JSON.parse(event.data);
+	} catch (_) {
+		return;
+	}
+	if (msg && typeof msg === 'object' && msg.type === 'schedule') {
+		applySchedulePayload(msg);
+		return;
+	}
+	update = msg;
+	if (update && typeof update === 'object' && update.schedule) {
+		applySchedulePayload({ schedule: update.schedule });
+	}
 	addSnapshot(update);
 	pending = update;
 	scheduleRender();
@@ -380,59 +492,28 @@ function applySnapshot(update) {
   let text = d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   timeEl.textContent = text;
 
-  if (update.config) {
-    if (update.config.day_start && document.activeElement !== ti_day) {
-      ti_day.value = update.config.day_start;
-    }
-    if (update.config.night_start && document.activeElement !== ti_nig) {
-      ti_nig.value = update.config.night_start;
-    }
-    if (typeof update.config.day_temp === 'number' && document.activeElement !== ta_day) {
-      ta_day.value = update.config.day_temp.toFixed(1);
-    }
-    if (typeof update.config.night_temp === 'number' && document.activeElement !== ta_nig) {
-      ta_nig.value = update.config.night_temp.toFixed(1);
-    }
-    if (typeof update.config.night_enabled === 'boolean') {
-      ti_flg.checked = update.config.night_enabled;
-      ta_nig.disabled = !ti_flg.checked;
-      ti_nig.disabled = !ti_flg.checked;
-    }
-  }
+	if (update.config) {
+		if (update.config.day_start && document.activeElement !== ti_day) {
+			ti_day.value = update.config.day_start;
+		}
+		if (update.config.night_start && document.activeElement !== ti_nig) {
+			ti_nig.value = update.config.night_start;
+		}
+		if (typeof update.config.day_temp === 'number' && document.activeElement !== ta_day) {
+			ta_day.value = update.config.day_temp.toFixed(1);
+		}
+		if (typeof update.config.night_temp === 'number' && document.activeElement !== ta_nig) {
+			ta_nig.value = update.config.night_temp.toFixed(1);
+		}
+		if (typeof update.config.night_enabled === 'boolean') {
+			ti_flg.checked = update.config.night_enabled;
+			ta_nig.disabled = !ti_flg.checked;
+			ti_nig.disabled = !ti_flg.checked;
+		}
+	}
 
-  // Read schedule state from worker meta (not from snapshots)
-  if (latestSchedule) {
-    const sched = latestSchedule;
-    if (typeof sched.target === 'number') {
-      scheduledTarget.textContent = sched.target.toFixed(1);
-    }
-    let modeLabel = 'Dag';
-    if (sched.preheat) {
-      modeLabel = 'Voorverwarmen';
-    } else if (!sched.is_day) {
-      modeLabel = 'Nacht';
-    }
-    scheduleMode.textContent = modeLabel;
-    if (typeof sched.minutes_to_next === 'number') {
-      scheduleNext.textContent = formatMinutes(sched.minutes_to_next);
-    }
-    if (sched.override) {
-      let overrideText = 'Handmatig';
-      if (typeof sched.override_target === 'number') {
-        overrideText = `Handmatig ${sched.override_target.toFixed(1)} °C`;
-      }
-      if (sched.override_until) {
-        const until = new Date(sched.override_until * 1000);
-        overrideText += ` tot ${until.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-      }
-      overrideState.textContent = overrideText;
-      if (overrideClear) overrideClear.disabled = false;
-    } else {
-      overrideState.textContent = 'Uit';
-      if (overrideClear) overrideClear.disabled = true;
-    }
-  }
-  countRecords();
+	updateScheduleUI();
+	countRecords();
 }
 
 // Sparkline (last 60 minutes). Shows Room and Target.
@@ -624,10 +705,13 @@ function onWorkerMessage(ev){
     if (out && typeof msg.avg === 'number') out.textContent = msg.avg;
     return;
   }
+  if (msg.type === 'schedule') {
+    applySchedulePayload(msg);
+    return;
+  }
   if (msg.type === 'snapshot') {
     // Receiving data implies WS is up; ensure indicator shows online
     wifi.style.background = '#00c4fa'; if (offlineBanner) offlineBanner.hidden = true;
-    latestSchedule = msg.data && msg.data.schedule ? { ...msg.data.schedule } : null;
     pending = msg.data;
     // Do not write to IDB here — worker is the writer
     scheduleRender();

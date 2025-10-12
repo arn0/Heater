@@ -3,10 +3,13 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 
+#include <string.h>
+
 #include "control.h"
 #include "heater.h"
 #include "task_priorities.h"
 #include "config.h"
+#include "webserver.h"
 
 static const char *TAG = "control_task";
 
@@ -24,6 +27,68 @@ static int minutes_until(int now_minutes, int target_minutes) {
 
 static float clamp_floor(float value, float floor_value) {
     return value < floor_value ? floor_value : value;
+}
+
+typedef struct {
+    float schedule_target;
+    float scheduled_base_target;
+    bool schedule_is_day;
+    bool preheat_active;
+    int32_t minutes_to_next_transition;
+    bool override_active;
+    float override_target;
+    time_t override_expires;
+    int day_start_minutes;
+    int night_start_minutes;
+    float day_temperature;
+    float night_temperature;
+    float floor_temperature;
+    bool night_enabled;
+    int preheat_min_minutes;
+    int preheat_max_minutes;
+    float warmup_rate_c_per_min;
+    float stage_full_delta;
+    float stage_single_delta;
+    float stage_hold_delta;
+    int override_duration_minutes;
+} schedule_snapshot_t;
+
+static schedule_snapshot_t s_last_schedule = {0};
+static bool s_schedule_valid = false;
+
+static void maybe_broadcast_schedule_snapshot(const heater_config_t *cfg) {
+    if (!cfg) {
+        return;
+    }
+
+    schedule_snapshot_t current = {0};
+    current.schedule_target = heater_status.schedule_target;
+    current.scheduled_base_target = heater_status.scheduled_base_target;
+    current.schedule_is_day = heater_status.schedule_is_day;
+    current.preheat_active = heater_status.preheat_active;
+    current.minutes_to_next_transition = heater_status.minutes_to_next_transition;
+    current.override_active = heater_status.override_active;
+    current.override_target = heater_status.override_target;
+    current.override_expires = heater_status.override_expires;
+    current.day_start_minutes = cfg->day_start_minutes;
+    current.night_start_minutes = cfg->night_start_minutes;
+    current.day_temperature = cfg->day_temperature;
+    current.night_temperature = cfg->night_temperature;
+    current.floor_temperature = cfg->floor_temperature;
+    current.night_enabled = cfg->night_enabled;
+    current.preheat_min_minutes = cfg->preheat_min_minutes;
+    current.preheat_max_minutes = cfg->preheat_max_minutes;
+    current.warmup_rate_c_per_min = cfg->warmup_rate_c_per_min;
+    current.stage_full_delta = cfg->stage_full_delta;
+    current.stage_single_delta = cfg->stage_single_delta;
+    current.stage_hold_delta = cfg->stage_hold_delta;
+    current.override_duration_minutes = cfg->override_duration_minutes;
+
+    if (!s_schedule_valid || memcmp(&current, &s_last_schedule, sizeof(schedule_snapshot_t)) != 0) {
+        s_last_schedule = current;
+        s_schedule_valid = true;
+        webserver_notify_schedule_update();
+    }
 }
 
 static void update_schedule_state(const heater_config_t *cfg, time_t now) {
@@ -123,6 +188,7 @@ void control_task() {
 
         update_schedule_state(cfg, now);
         update_override_state(cfg, now);
+        maybe_broadcast_schedule_snapshot(cfg);
 
         float effective_target = heater_status.schedule_target;
         if (heater_status.override_active) {
