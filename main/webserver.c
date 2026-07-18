@@ -27,7 +27,6 @@
 #include "lvgl_ui.h"
 #include "json.h"
 #include "config.h"
-#include "knmi.h"
 #include <time.h>
 
 #define HEATER_WEB_STEP 0.1
@@ -37,18 +36,6 @@ int led_state = 0;
 
 static bool json_get_string( const char *json, const char *key, char *out, size_t out_len );
 static bool json_get_int64( const char *json, const char *key, int64_t *out );
-static esp_err_t handle_knmi_series_request( httpd_req_t *req, const char *payload );
-
-typedef struct {
-	httpd_handle_t handle;
-	int sockfd;
-	int64_t start;
-	int64_t end;
-	char request_id[64];
-} knmi_series_job_t;
-
-static void knmi_series_task(void *arg);
-
 /* Max length a file path can have on storage */ // FIXME: remove CONFIG_, get acurate file name length
 #define CONFIG_SPIFFS_OBJ_NAME_LEN 32
 #define FILE_PATH_MAX ( ESP_VFS_PATH_MAX + CONFIG_SPIFFS_OBJ_NAME_LEN )
@@ -378,113 +365,7 @@ static bool json_get_int64( const char *json, const char *key, int64_t *out ) {
 	return true;
 }
 
-static esp_err_t handle_knmi_series_request( httpd_req_t *req, const char *payload ) {
-	int64_t start_s = 0;
-	int64_t end_s = 0;
-	char request_id[64] = { 0 };
-	if (!json_get_int64( payload, "start", &start_s ) || !json_get_int64( payload, "end", &end_s )) {
-		ESP_LOGW( TAG, "KNMI series request missing start/end" );
-		return ESP_ERR_INVALID_ARG;
-	}
-	if (!json_get_string( payload, "request_id", request_id, sizeof( request_id ) )) {
-		request_id[0] = '\0';
-	}
-	if (end_s < start_s) {
-		int64_t tmp = start_s;
-		start_s = end_s;
-		end_s = tmp;
-	}
-    knmi_series_job_t *job = (knmi_series_job_t *)malloc(sizeof(knmi_series_job_t));
-    if (!job) {
-        ESP_LOGE(TAG, "Failed to allocate knmi series job");
-        return ESP_ERR_NO_MEM;
-    }
-    job->handle = req->handle;
-    job->sockfd = httpd_req_to_sockfd(req);
-    job->start = start_s;
-    job->end = end_s;
-    strlcpy(job->request_id, request_id, sizeof(job->request_id));
-    ESP_LOGI(TAG, "KNMI series request start=%lld end=%lld", (long long)start_s, (long long)end_s);
-    BaseType_t created = xTaskCreatePinnedToCore(knmi_series_task, "knmi_series", 8192, job, tskIDLE_PRIORITY + 1, NULL, 0);
-    if (created != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create knmi series task");
-        free(job);
-        return ESP_FAIL;
-    }
-    return ESP_OK;
-}
 
-static void knmi_series_task(void *arg) {
-    knmi_series_job_t *job = (knmi_series_job_t *)arg;
-    if (!job) {
-        vTaskDelete(NULL);
-        return;
-    }
-        knmi_series_t series = {0};
-        esp_err_t err = knmi_fetch_series((time_t)job->start, (time_t)job->end, &series);
-        const size_t sample_count = series.count;
-        ESP_LOGI(TAG, "KNMI series fetched %u samples", (unsigned)sample_count);
-        const size_t base = 160 + (job->request_id[0] ? strlen(job->request_id) + 16 : 0);
-        size_t capacity = base + sample_count * 48;
-        char *resp = (char *)malloc(capacity);
-        if (!resp) {
-            ESP_LOGE(TAG, "Failed to allocate KNMI response buffer");
-            knmi_series_free(&series);
-            free(job);
-            vTaskDelete(NULL);
-            return;
-        }
-        int offset = snprintf(resp, capacity,
-            "{\"type\":\"knmi_series\",\"ok\":%s,\"start\":%lld,\"end\":%lld",
-            (err == ESP_OK) ? "true" : "false",
-            (long long)job->start,
-            (long long)job->end);
-        if (job->request_id[0] && offset > 0) {
-            offset += snprintf(resp + offset, capacity - offset, ",\"request_id\":\"%s\"", job->request_id);
-        }
-        if (offset < 0) offset = 0;
-        if ((size_t)offset >= capacity) offset = (int)(capacity - 1);
-        if (err == ESP_OK && sample_count > 0) {
-            offset += snprintf(resp + offset, capacity - offset, ",\"samples\":[");
-            for (size_t i = 0; i < sample_count && (size_t)offset < capacity; ++i) {
-                offset += snprintf(resp + offset, capacity - offset, "%s[%lld,%.3f]",
-                    i == 0 ? "" : ",",
-                    (long long)series.samples[i].timestamp,
-                    (double)series.samples[i].temperature);
-            }
-            offset += snprintf(resp + offset, capacity - offset, "]");
-        } else {
-            offset += snprintf(resp + offset, capacity - offset, ",\"samples\":[]");
-        }
-        if (err != ESP_OK) {
-            offset += snprintf(resp + offset, capacity - offset, ",\"error\":\"%s\"", esp_err_to_name(err));
-        }
-        if (offset < 0) offset = 0;
-        if ((size_t)offset > capacity - 2) {
-            offset = (capacity > 2) ? (int)(capacity - 2) : 0;
-        }
-        int tail = snprintf(resp + offset, capacity - offset, "}");
-        if (tail < 0 || (size_t)tail >= capacity - offset) {
-            resp[capacity - 1] = '\0';
-        }
-
-        knmi_series_free(&series);
-
-        httpd_ws_frame_t ws_frame = {
-            .final = true,
-            .fragmented = false,
-            .type = HTTPD_WS_TYPE_TEXT,
-            .payload = (uint8_t *)resp,
-            .len = strlen(resp) };
-        esp_err_t send_err = httpd_ws_send_frame_async(job->handle, job->sockfd, &ws_frame);
-        if (send_err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to send KNMI series response: %s", esp_err_to_name(send_err));
-        }
-
-        free(resp);
-        free(job);
-        vTaskDelete(NULL);
-}
 
 int16_t do_checksum( int8_t *buffer, size_t size ) {
 	int16_t sum = 0;
@@ -737,13 +618,6 @@ static esp_err_t get_ws_handler( httpd_req_t *req ) {
 					}
 				} else if (strcmp( type_buf, "knmi" ) == 0) {
 					ESP_LOGW( TAG, "knmi found." );
-					//esp_err_t knmi_ret = knmi_handle_ws_command( json_str );
-					//if (knmi_ret != ESP_OK && knmi_ret != ESP_ERR_INVALID_ARG) {
-						//ESP_LOGW( TAG, "Failed to handle KNMI command: %s", esp_err_to_name( knmi_ret ) );
-					//}
-				} else if (strcmp( type_buf, "knmi_series" ) == 0) {
-					ESP_LOGW( TAG, "knmi_series found." );
-					handler_ret = handle_knmi_series_request( req, json_str );
 				} else {
 					ESP_LOGW( TAG, "No match found." );
 				}
