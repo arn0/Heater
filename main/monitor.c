@@ -63,7 +63,8 @@ static time_t next_knmi_fetch = 0;
 int32_t start_pzem;
 #define WAIT_PZEM 3
 
-void monitor_task() {
+void monitor_task(void *arg) {
+	(void)arg;
 	TickType_t xPreviousWakeTime;
 	const TickType_t xTimeIncrement = pdMS_TO_TICKS( MONITOR_TASK_DELAY_MS );
 	BaseType_t xWasDelayed;

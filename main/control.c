@@ -165,7 +165,8 @@ static void update_override_state(const heater_config_t *cfg, time_t now) {
     }
 }
 
-void control_task() {
+void control_task(void *arg) {
+    (void)arg;
     TickType_t previous_wake_time = xTaskGetTickCount();
     const TickType_t time_increment = pdMS_TO_TICKS(CONTROL_TASK_DELAY_MS);
 

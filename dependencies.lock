@@ -35,7 +35,7 @@ dependencies:
       type: service
     version: 2.0.4
   espressif/led_strip:
-    component_hash: 223998f10cae6d81f2ad2dd3c1103c2221be298c708e37917482b0153f3ec64e
+    component_hash: 28621486f77229aaf81c71f5e15d6fbf36c2949cf11094e07090593e659e7639
     dependencies:
     - name: idf
       require: private
@@ -43,7 +43,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 3.0.1~1
+    version: 3.0.3
   espressif/mdns:
     component_hash: 3ec0af5f6bce310512e90f482388d21cc7c0e99668172d2f895356165fc6f7c5
     dependencies:
@@ -67,7 +67,7 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.1
+    version: 6.0.0
   lvgl/lvgl:
     component_hash: 948bff879a345149b83065535bbc4a026ce9f47498a22881e432a264b9098015
     dependencies: []
@@ -78,7 +78,7 @@ dependencies:
   nimble_central_utils:
     dependencies: []
     source:
-      path: /Users/arno/esp/v5.5.1/esp-idf/examples/bluetooth/nimble/common/nimble_central_utils
+      path: ../../../../.espressif/v6.0/esp-idf/examples/bluetooth/nimble/common/nimble_central_utils
       type: local
     version: '*'
 direct_dependencies:
@@ -90,6 +90,6 @@ direct_dependencies:
 - idf
 - lvgl/lvgl
 - nimble_central_utils
-manifest_hash: 52e5b662ecb151de31bd401527a7792e43bf93766bb73384e3621ce6438a2928
+manifest_hash: 0b271cb93066a6d2bc9d29cff22865fb6f2ecebc758fd240132f960f988b4ce5
 target: esp32s3
-version: 2.0.0
+version: 3.0.0

@@ -2,10 +2,10 @@
 dependencies:
   lvgl/lvgl: "~8.3.0"
   espressif/esp_lcd_gc9a01: "*"
-  espressif/mdns: "*"
-  espressif/led_strip: "*"
+  espressif/mdns: "1.8.2"
+  espressif/led_strip: "3.0.3"
   espressif/ds18b20: "*"
-  espressif/onewire_bus: "*"
+  espressif/onewire_bus: "1.0.4"
 
   nimble_central_utils:
     path: ${IDF_PATH}/examples/bluetooth/nimble/common/nimble_central_utils

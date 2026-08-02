@@ -427,7 +427,8 @@ static void clear_override( void ) {
  * Send updates to client
  */
 
-void send_sensor_update() {
+static void send_sensor_update(void *arg) {
+	(void)arg;
 	TickType_t xPreviousWakeTime;
 	const TickType_t xTimeIncrement = pdMS_TO_TICKS( WS_UPDATE_TASK_DELAY_MS );
 	BaseType_t xWasDelayed;

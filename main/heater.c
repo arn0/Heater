@@ -13,7 +13,8 @@ static const char *TAG = "heaters";
 
 struct heater_status heater_status;
 
-void heater_task() {
+void heater_task(void *arg) {
+	(void)arg;
 	TickType_t xPreviousWakeTime;
 	const TickType_t xTimeIncrement = pdMS_TO_TICKS( HEATER_TASK_DELAY_MS );
 	BaseType_t xWasDelayed;

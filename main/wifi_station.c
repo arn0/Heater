@@ -143,11 +143,11 @@ static void wifi_event_handler( void *arg, esp_event_base_t event_base, int32_t 
 		case WIFI_EVENT_ITWT_SUSPEND: // iTWT suspend
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_ITWT_SUSPEND");
 			break;
-		case WIFI_EVENT_NAN_STARTED: // NAN Discovery has started
-			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_STARTED");
+		case WIFI_EVENT_NAN_SYNC_STARTED: // NAN Discovery has started
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_SYNC_STARTED");
 			break;
-		case WIFI_EVENT_NAN_STOPPED: // NAN Discovery has stopped
-			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_STOPPED");
+		case WIFI_EVENT_NAN_SYNC_STOPPED: // NAN Discovery has stopped
+			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_SYNC_STOPPED");
 			break;
 		case WIFI_EVENT_NAN_SVC_MATCH: // NAN Service Discovery match found
 			ESP_LOGI(TAG, "wifi event handler: WIFI_EVENT_NAN_SVC_MATCH");
@@ -201,8 +201,8 @@ static void ip_event_handler( void *arg, esp_event_base_t event_base, int32_t ev
 			lvgl_ui_update();
 #endif
 			break;
-		case IP_EVENT_AP_STAIPASSIGNED: // soft-AP assign an IP to a connected station
-			ESP_LOGI( TAG, "ip event handler: IP_EVENT_AP_STAIPASSIGNED" );
+		case IP_EVENT_ASSIGNED_IP_TO_CLIENT: // soft-AP assign an IP to a connected station
+			ESP_LOGI( TAG, "ip event handler: IP_EVENT_ASSIGNED_IP_TO_CLIENT" );
 			break;
 		case IP_EVENT_GOT_IP6: // station or ap or ethernet interface v6IP addr is preferred
 			ESP_LOGI( TAG, "ip event handler: IP_EVENT_GOT_IP6" );

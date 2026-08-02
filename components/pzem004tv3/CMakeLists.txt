@@ -1,4 +1,4 @@
-set(req driver freertos log esp_timer)
+set(req esp_driver_uart esp_driver_gpio freertos log esp_timer)
 
 idf_component_register(
     SRCS "pzem004tv3.c" 
